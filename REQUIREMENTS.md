@@ -14,8 +14,8 @@ Hệ thống là một bot Telegram cá nhân hóa chạy trên môi trường P
 
 ## 3. CHI TIẾT CHỨC NĂNG (FUNCTIONAL REQUIREMENTS)
 
-### F1: Bản tin đẩy hàng ngày (Daily Push Briefing)
-- **Mục tiêu:** Tự động gửi tin tức tóm tắt theo sở thích.
+### F1: Bản tin đẩy định kỳ (Scheduled Push Briefing)
+- **Mục tiêu:** Tự động gửi tin tức tóm tắt theo lịch trình và sở thích.
 - **Quy trình:**
     1. Quét tin từ RSS/News sources.
     2. Lọc tin dựa trên danh sách `block` (Exclusions).

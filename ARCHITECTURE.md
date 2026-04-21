@@ -16,7 +16,7 @@ graph TD
     subgraph Core_Logic [Orchestrator & Services]
         Handlers[Message Handlers]
         FSM[State Manager<br/>Focus Mode]
-        Scheduler[APScheduler<br/>Daily Jobs]
+        Scheduler[APScheduler Jobs]
     end
 
     TG <--> Handlers
@@ -73,8 +73,8 @@ graph TD
 
 ## 4. Operational Flows
 
-### A. Daily Briefing Flow (SYS1)
-1. **Trigger:** APScheduler kích hoạt theo giờ cấu hình (vd: 08:00).
+### A. News Briefing Flow (SYS1)
+1. **Trigger:** APScheduler kích hoạt dựa trên danh sách các khung giờ cấu hình (vd: [08:00, 15:00, 22:00]).
 2. **Collect:** Quét tin từ nguồn -> Lọc qua `Inclusions/Exclusions`.
 3. **AI Task:** Gửi 5 tin hàng đầu sang Ollama để tóm tắt.
 4. **Archive:** Lưu metadata của 5 tin này vào bảng `news_articles` kèm `article_id`.
@@ -168,8 +168,8 @@ class MessengerProtocol(Protocol):
 Đóng vai trò Orchestrator, điều phối luồng nghiệp vụ giữa các module.
 ```python
 class BriefingServiceProtocol(Protocol):
-    async def run_daily_briefing(self, chat_id: int) -> None:
-        """Thực thi toàn bộ quy trình từ quét tin đến gửi bản tin."""
+    async def run_scheduled_briefing(self, chat_id: int) -> None:
+        """Thực thi toàn bộ quy trình từ quét tin đến gửi bản tin tại một khung giờ cụ thể."""
         ...
 
     async def run_deep_dive(self, chat_id: int, article_id: str, question: str) -> None:
@@ -195,7 +195,7 @@ class FormatterProtocol(Protocol):
 ## 7. Data Management & Retention
 
 ### 7.1. News Archiving Policy
-- **Persistence:** Metadata của mỗi bản tin hàng ngày được lưu trữ vào SQLite để đảm bảo các nút bấm trên tin nhắn cũ vẫn hoạt động.
+- **Persistence:** Metadata của mỗi bản tin theo lịch trình được lưu trữ vào SQLite để đảm bảo các nút bấm trên tin nhắn cũ vẫn hoạt động.
 - **Data Pruning (TTL):** Hệ thống áp dụng chính sách lưu trữ **Rolling 30-day Window**.
 - **Cleanup Job:** `APScheduler` sẽ thực hiện lệnh `DELETE` định kỳ hàng tuần cho các bản ghi có `created_at` cũ hơn 30 ngày để tối ưu dung lượng Disk.
 
@@ -224,5 +224,5 @@ class UserConfigDTO:
     chat_id: int
     follow_keywords: list[str]
     block_keywords: list[str]
-    briefing_time: str = "08:00"
+    briefing_times: list[str] = field(default_factory=lambda: ["08:00"])
 ```

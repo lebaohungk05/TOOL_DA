@@ -13,3 +13,7 @@ If the project do not have .venv, instantiate it with
 ```bash
 uv venv
 ```
+Always use strict typing
+Always write docstring for class and function
+Code comment must be written in English
+To be precise, not to use analogies.

@@ -145,6 +145,9 @@ class StorageProtocol(Protocol):
     async def get_article_by_id(self, article_id: str) -> NewsDTO | None:
         """Truy xuất tin tức lịch sử từ Archive."""
         ...
+    async def get_user_config(serf, user_id: int) -> UserConfigDTO:
+        """Get user config for UI display"""
+
 ```
 
 ### 6.4. `MessengerProtocol`

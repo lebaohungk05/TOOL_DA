@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 from typing import Optional
 
 from src.models import NewsDTO
@@ -38,28 +39,76 @@ class BriefingService(BriefingServiceProtocol):
         self.storage = storage
         self.messenger = messenger
 
-    async def run_scheduled_briefing(self, chat_id: int) -> None:
-        """Execute the full scheduled briefing workflow."""
-        logger.info(f"Starting scheduled briefing for chat {chat_id}")
+    def _filter_and_prioritize(
+        self, articles: list[NewsDTO], follow: list[str], block: list[str]
+    ) -> list[NewsDTO]:
+        """Apply dynamic filtering using regex for exact word matching."""
+        block_patterns = [re.compile(rf"\b{re.escape(kw.lower())}\b") for kw in block]
+        follow_patterns = [re.compile(rf"\b{re.escape(kw.lower())}\b") for kw in follow]
+        
+        prioritized = []
+        normal = []
+
+        for article in articles:
+            text = (article.title + " " + article.summary).lower()
+            
+            # Exclusion logic
+            if any(p.search(text) for p in block_patterns):
+                continue
+            
+            # Inclusion/Prioritization logic
+            if any(p.search(text) for p in follow_patterns):
+                prioritized.append(article)
+            else:
+                normal.append(article)
+                
+        return prioritized + normal
+
+    async def run_scheduled_briefing(self, recipient_id: str) -> None:
+        """
+        Execute the full scheduled briefing workflow:
+        1. Fetch fresh articles.
+        2. Filter based on user preferences.
+        3. Parallelize AI summarization.
+        4. Archive results in the database.
+        5. Push formatted briefing to the user.
+        
+        Args:
+            recipient_id: The unique ID of the recipient to receive the briefing.
+        """
+        logger.info(f"Starting scheduled briefing for recipient {recipient_id}")
+        
+        # Default language for early fallbacks
+        lang = "vi"
         
         try:
-            # 1. Fetch user config to get preferences (not used for selection yet, but good for context)
-            user_config = await self.storage.get_user_config(user_id=chat_id)
+            # 1. Fetch user config to get preferences and language
+            follow_keywords = []
+            block_keywords = []
+            user_config = await self.storage.get_user_config(user_id=recipient_id)
+            if user_config:
+                lang = user_config.language
+                follow_keywords = user_config.follow_keywords
+                block_keywords = user_config.block_keywords
+                
             feeds = ["default_rss"] # Mocked feed list for now
             
             # 2. Fetch fresh news
             raw_news = await self.news_repo.fetch_from_feeds(feeds)
             if not raw_news:
-                await self.messenger.notify_system_event(chat_id, "No new news found for your briefing.")
+                await self.messenger.notify_event(recipient_id, "no_news_found", language=lang)
                 return
 
+            # Apply filtering and prioritization based on user config
+            filtered_news = self._filter_and_prioritize(raw_news, follow_keywords, block_keywords)
+
             # Keep top 5
-            top_news = raw_news[:5]
+            top_news = filtered_news[:5]
 
             # 3. Parallelize AI Summarization
             async def summarize_task(item: NewsDTO) -> NewsDTO:
                 try:
-                    summary = await self.ai_service.summarize_news(item.raw_content or item.title)
+                    summary = await self.ai_service.summarize_news(item.raw_content or item.title, lang)
                     return NewsDTO(
                         article_id=item.article_id,
                         title=item.title,
@@ -78,10 +127,9 @@ class BriefingService(BriefingServiceProtocol):
             summarized_news = await asyncio.gather(*(summarize_task(n) for n in top_news))
 
             # 4. Archive results
-            # Note: archive_news_items returns a list of assigned article_ids
             article_ids = await self.storage.archive_news_items(list(summarized_news))
             
-            # Reconstruct DTOs with confirmed IDs if they were missing
+            # Reconstruct DTOs with confirmed IDs
             final_news = []
             for i, item in enumerate(summarized_news):
                 final_news.append(NewsDTO(
@@ -95,55 +143,72 @@ class BriefingService(BriefingServiceProtocol):
                 ))
 
             # 5. Push via Telegram
-            await self.messenger.send_briefing(chat_id, final_news)
-            logger.info(f"Successfully completed briefing for chat {chat_id}")
+            await self.messenger.send_briefing(recipient_id, final_news, lang)
+            logger.info(f"Successfully completed briefing for recipient {recipient_id} in {lang}")
 
         except Exception as e:
             logger.error(f"Error during scheduled briefing workflow: {str(e)}")
-            await self.messenger.notify_system_event(chat_id, "⚠️ A system error occurred while generating your briefing.")
+            await self.messenger.notify_event(recipient_id, "error_system", language=lang)
 
-    async def run_deep_dive(self, chat_id: int, article_id: str, question: str) -> None:
-        """Execute the contextual deep-dive workflow."""
-        logger.info(f"Starting deep-dive for chat {chat_id} on article {article_id}")
+    async def run_deep_dive(self, recipient_id: str, article_id: str, question: str) -> None:
+        """
+        Execute the contextual deep-dive workflow:
+        1. Retrieve original article from storage.
+        2. Extract search queries using AI.
+        3. Fetch additional context via web search.
+        4. Synthesize final grounded answer via AI.
+        5. Push detailed response to the user.
+        
+        Args:
+            recipient_id: The unique ID of the recipient.
+            article_id: The unique ID of the news article in focus.
+            question: The specific question asked by the user.
+        """
+        logger.info(f"Starting deep-dive for recipient {recipient_id} on article {article_id}")
+        
+        lang = "vi"
 
         try:
-            # 1. Retrieve article context
+            # 1. Fetch user config for language
+            user_config = await self.storage.get_user_config(user_id=recipient_id)
+            if user_config:
+                lang = user_config.language
+
+            # 2. Retrieve article context
             original_article = await self.storage.get_article_by_id(article_id)
             if not original_article:
-                await self.messenger.notify_system_event(chat_id, "Sorry, I can't find the original article context.")
+                await self.messenger.notify_event(recipient_id, "error_context_not_found", language=lang)
                 return
 
-            # 2. Extract Search Queries
+            # 3. Extract Search Queries
             try:
-                queries = await self.ai_service.extract_search_queries(question)
+                queries = await self.ai_service.extract_search_queries(question, lang)
                 if not queries:
                     queries = [original_article.title]
             except Exception as e:
                 logger.warning(f"AI query extraction failed: {e}")
                 queries = [original_article.title]
 
-            # 3. Web Search for contextual enrichment
+            # 4. Web Search for contextual enrichment
             web_results = []
             try:
-                # Search for the top query
                 web_results = await self.news_repo.search_web(queries[0])
             except Exception as e:
                 logger.error(f"Web search failed: {e}")
 
-            # 4. AI Synthesis
+            # 5. AI Synthesis
             try:
-                # Combine original article with web results
                 all_context = [original_article] + web_results
-                answer = await self.ai_service.synthesize_response(all_context, question)
+                answer = await self.ai_service.synthesize_response(all_context, question, lang)
             except Exception as e:
                 logger.error(f"AI synthesis failed: {e}")
                 answer = "I'm sorry, I'm having trouble synthesizing a detailed answer right now."
 
-            # 5. Push via Telegram
+            # 6. Push via Telegram
             source_urls = [original_article.url] + [r.url for r in web_results]
-            await self.messenger.send_deep_dive_response(chat_id, answer, source_urls)
-            logger.info(f"Successfully completed deep-dive for chat {chat_id}")
+            await self.messenger.send_deep_dive_response(recipient_id, answer, source_urls, lang)
+            logger.info(f"Successfully completed deep-dive for recipient {recipient_id} in {lang}")
 
         except Exception as e:
             logger.error(f"Error during deep-dive workflow: {str(e)}")
-            await self.messenger.notify_system_event(chat_id, "⚠️ Error processing your deep-dive request.")
+            await self.messenger.notify_event(recipient_id, "error_deep_dive", language=lang)

@@ -10,6 +10,7 @@ Hệ thống được thiết kế theo mô hình **Event-Driven Agentic Archite
 ## 2. System Architecture Diagram
 
 ```mermaid
+%%{init: {"flowchart": {"defaultRenderer": "elk"}} }%%
 graph TD
     User((User)) <--> TG[Telegram Bot Interface<br/>aiogram 3.x]
     

@@ -1,4 +1,4 @@
-from typing import Protocol, Optional
+from typing import Protocol
 from src.models import NewsDTO
 
 class FormatterProtocol(Protocol):

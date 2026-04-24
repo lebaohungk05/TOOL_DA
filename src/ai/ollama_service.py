@@ -1,10 +1,10 @@
 import logging
 import os
-from typing import Any
 from dotenv import load_dotenv
 from ollama import AsyncClient, ResponseError
 from src.ai.protocol import AIServiceProtocol
 from src.models import NewsDTO
+from src.core.i18n import get_text
 
 # Setup logging
 logger = logging.getLogger(__name__)
@@ -33,8 +33,8 @@ class OllamaAIService(AIServiceProtocol):
         Initialize the Ollama AI service.
         
         Args:
-            model: The name of the model to use (default: $OLLAMA_MODEL or gemma4:E4B).
-            host: The Ollama server URL (default: $OLLAMA_HOST or http://localhost:11434).
+            model: The name of the model to use (default: $OLLAMA_MODEL).
+            host: The Ollama server URL (default: $OLLAMA_HOST).
         """
         self.model = model or os.getenv("OLLAMA_MODEL", "gemma4:E4B")
         host = host or os.getenv("OLLAMA_HOST", "http://localhost:11434")
@@ -49,9 +49,6 @@ class OllamaAIService(AIServiceProtocol):
             
         Returns:
             The content of the AI response.
-            
-        Raises:
-            AIServiceConnectionError: If connection fails or Ollama returns an error.
         """
         logger.debug(f"Calling Ollama (model={self.model}) with messages: {messages}")
         try:
@@ -63,41 +60,28 @@ class OllamaAIService(AIServiceProtocol):
             logger.error(f"Ollama API error: {e.error}")
             raise AIServiceConnectionError(f"Ollama API error: {e.error}") from e
         except Exception as e:
-            # Catching generic exceptions from httpx or others as connection issues
             logger.error(f"Ollama connection failure: {str(e)}")
             raise AIServiceConnectionError(f"Ollama connection failed: {str(e)}") from e
 
-    async def summarize_news(self, raw_content: str) -> str:
+    async def summarize_news(self, raw_content: str, language: str = "vi") -> str:
         """
-        Summarize news content into a maximum of 2 sentences.
+        Summarize news content into a maximum of 2 sentences in the target language.
         """
-        prompt = (
-            "You are an objective news summarizer. "
-            "Summarize the following content in EXACTLY 1 or 2 concise, factual sentences. "
-            "Do NOT add any analysis, opinion, or introductory phrases (like 'This article is about').\n\n"
-            f"Content: {raw_content}"
-        )
+        prompt = get_text("prompt_summarizer", language, content=raw_content)
         messages = [{"role": "user", "content": prompt}]
         return await self._call(messages)
 
-    async def extract_search_queries(self, user_prompt: str) -> list[str]:
+    async def extract_search_queries(self, user_prompt: str, language: str = "vi") -> list[str]:
         """
         Extract search keywords from a user prompt.
-        
-        Returns a list of 3-5 concise search terms.
         """
-        prompt = (
-            "You are a search query designer. "
-            "Extract 3 to 5 key search terms from the following user request that would help find relevant news articles. "
-            "Return ONLY a comma-separated list of keywords. No numbering, no introductory text.\n\n"
-            f"User Request: {user_prompt}"
-        )
+        prompt = get_text("prompt_query_designer", language, user_prompt=user_prompt)
         messages = [{"role": "user", "content": prompt}]
         response = await self._call(messages)
         
         # Post-processing: Split by comma and clean up
         keywords = [kw.strip() for kw in response.split(",") if kw.strip()]
-        return keywords[:5]  # Limit to 5
+        return keywords[:5]
 
     def _format_articles(self, articles: list[NewsDTO]) -> str:
         """Format articles into a text block for the LLM."""
@@ -111,20 +95,16 @@ class OllamaAIService(AIServiceProtocol):
             )
         return "\n".join(formatted)
 
-    async def synthesize_response(self, articles: list[NewsDTO], question: str) -> str:
+    async def synthesize_response(self, articles: list[NewsDTO], question: str, language: str = "vi") -> str:
         """
         Synthesize a factual response based on provided articles and a question.
-        
-        Ensures 'eyes and ears only' approach.
         """
         formatted_articles = self._format_articles(articles)
-        prompt = (
-            "You are a factual assistance tool (eyes and ears only). "
-            "Answer the question based ONLY on the provided articles. "
-            "If the information is not present in the articles, explicitly say 'I don't have enough information from the provided articles.' "
-            "Do NOT add your own opinions, outside knowledge, or creative interpretations.\n\n"
-            f"Articles:\n{formatted_articles}\n\n"
-            f"Question: {question}"
+        prompt = get_text(
+            "prompt_synthesizer", 
+            language, 
+            articles=formatted_articles, 
+            question=question
         )
         messages = [{"role": "user", "content": prompt}]
         return await self._call(messages)

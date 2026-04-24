@@ -12,25 +12,57 @@ class StorageProtocol(Protocol):
         """Close the storage connection."""
         ...
 
-    async def upsert_user_config(self, user_id: int, config: UserConfigDTO) -> None:
+    async def upsert_user_config(self, user_id: str, config: UserConfigDTO) -> None:
         """
         Save or update user configuration.
         
         Args:
-            user_id: The unique Telegram user ID.
+            user_id: The unique user ID.
             config: The configuration DTO.
         """
         ...
 
-    async def get_user_config(self, user_id: int) -> Optional[UserConfigDTO]:
+    async def get_user_config(self, user_id: str) -> Optional[UserConfigDTO]:
         """
         Retrieve user configuration by ID.
         
         Args:
-            user_id: The unique Telegram user ID.
+            user_id: The unique user ID.
             
         Returns:
             The UserConfigDTO if found, else None.
+        """
+        ...
+
+    async def save_session_context(self, recipient_id: str, context: dict) -> None:
+        """
+        Save the session context for a recipient.
+        
+        Args:
+            recipient_id: The unique recipient ID.
+            context: A dictionary of context data.
+        """
+        ...
+        
+    async def get_session_context(self, recipient_id: str) -> Optional[dict]:
+        """
+        Retrieve the session context for a recipient.
+        
+        Args:
+            recipient_id: The unique recipient ID.
+            
+        Returns:
+            A dictionary of context data if found, else None.
+        """
+        ...
+
+    async def get_all_user_configs(self) -> list[UserConfigDTO]:
+        """
+        Retrieve all user configurations.
+        Used by the Scheduler to enumerate users for scheduled operations.
+        
+        Returns:
+            A list of all UserConfigDTO entries.
         """
         ...
 

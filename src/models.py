@@ -12,8 +12,10 @@ class NewsDTO:
 
 @dataclass(frozen=True)
 class UserConfigDTO:
-    user_id: int
-    chat_id: int
+    user_id: str
+    recipient_id: str
     follow_keywords: list[str]
     block_keywords: list[str]
-    briefing_times: list[str] = field(default_factory=lambda: ["08:00"])
+    name: str = ""
+    briefing_times: list[str] = field(default_factory=list)
+    language: str = "vi"

@@ -57,9 +57,17 @@ class SQLiteStorage(StorageProtocol):
 
         await self._connection.execute("""
             CREATE TABLE IF NOT EXISTS users (
-                user_id INTEGER PRIMARY KEY,
-                chat_id INTEGER NOT NULL,
+                user_id TEXT PRIMARY KEY,
+                recipient_id TEXT NOT NULL,
                 config_json TEXT NOT NULL
+            )
+        """)
+
+        await self._connection.execute("""
+            CREATE TABLE IF NOT EXISTS user_sessions (
+                recipient_id TEXT PRIMARY KEY,
+                context_json TEXT NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
 
@@ -77,7 +85,7 @@ class SQLiteStorage(StorageProtocol):
         """)
         await self._connection.commit()
 
-    async def upsert_user_config(self, user_id: int, config: UserConfigDTO) -> None:
+    async def upsert_user_config(self, user_id: str, config: UserConfigDTO) -> None:
         """Save or update user configuration."""
         if not self._connection:
             await self.connect()
@@ -85,29 +93,31 @@ class SQLiteStorage(StorageProtocol):
         config_dict = {
             "follow_keywords": config.follow_keywords,
             "block_keywords": config.block_keywords,
-            "briefing_times": config.briefing_times
+            "briefing_times": config.briefing_times,
+            "name": config.name,
+            "language": config.language,
         }
         config_json = json.dumps(config_dict)
 
         await self._connection.execute(
             """
-            INSERT INTO users (user_id, chat_id, config_json)
+            INSERT INTO users (user_id, recipient_id, config_json)
             VALUES (?, ?, ?)
             ON CONFLICT(user_id) DO UPDATE SET
-                chat_id = excluded.chat_id,
+                recipient_id = excluded.recipient_id,
                 config_json = excluded.config_json
             """,
-            (user_id, config.chat_id, config_json)
+            (user_id, config.recipient_id, config_json)
         )
         await self._connection.commit()
 
-    async def get_user_config(self, user_id: int) -> Optional[UserConfigDTO]:
+    async def get_user_config(self, user_id: str) -> Optional[UserConfigDTO]:
         """Retrieve user configuration by ID."""
         if not self._connection:
             await self.connect()
 
         async with self._connection.execute(
-            "SELECT chat_id, config_json FROM users WHERE user_id = ?",
+            "SELECT recipient_id, config_json FROM users WHERE user_id = ?",
             (user_id,)
         ) as cursor:
             row = await cursor.fetchone()
@@ -117,11 +127,68 @@ class SQLiteStorage(StorageProtocol):
             config_data = json.loads(row["config_json"])
             return UserConfigDTO(
                 user_id=user_id,
-                chat_id=row["chat_id"],
+                recipient_id=row["recipient_id"],
                 follow_keywords=config_data.get("follow_keywords", []),
                 block_keywords=config_data.get("block_keywords", []),
-                briefing_times=config_data.get("briefing_times", ["08:00"])
+                name=config_data.get("name", ""),
+                briefing_times=config_data.get("briefing_times", []),
+                language=config_data.get("language", "vi"),
             )
+
+    async def save_session_context(self, recipient_id: str, context: dict) -> None:
+        """Save the session context for a recipient."""
+        if not self._connection:
+            await self.connect()
+            
+        context_json = json.dumps(context)
+        await self._connection.execute(
+            """
+            INSERT INTO user_sessions (recipient_id, context_json, updated_at)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(recipient_id) DO UPDATE SET
+                context_json = excluded.context_json,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (recipient_id, context_json)
+        )
+        await self._connection.commit()
+        
+    async def get_session_context(self, recipient_id: str) -> Optional[dict]:
+        """Retrieve the session context for a recipient."""
+        if not self._connection:
+            await self.connect()
+
+        async with self._connection.execute(
+            "SELECT context_json FROM user_sessions WHERE recipient_id = ?",
+            (recipient_id,)
+        ) as cursor:
+            row = await cursor.fetchone()
+            if not row:
+                return None
+
+            return json.loads(row["context_json"])
+
+    async def get_all_user_configs(self) -> list[UserConfigDTO]:
+        """Retrieve all user configurations for scheduled operations."""
+        if not self._connection:
+            await self.connect()
+
+        configs: list[UserConfigDTO] = []
+        async with self._connection.execute(
+            "SELECT user_id, recipient_id, config_json FROM users"
+        ) as cursor:
+            async for row in cursor:
+                config_data = json.loads(row["config_json"])
+                configs.append(UserConfigDTO(
+                    user_id=row["user_id"],
+                    recipient_id=row["recipient_id"],
+                    follow_keywords=config_data.get("follow_keywords", []),
+                    block_keywords=config_data.get("block_keywords", []),
+                    name=config_data.get("name", ""),
+                    briefing_times=config_data.get("briefing_times", []),
+                    language=config_data.get("language", "vi"),
+                ))
+        return configs
 
     async def archive_news_items(self, items: list[NewsDTO]) -> list[str]:
         """Archive a list of news items and return their unique IDs."""

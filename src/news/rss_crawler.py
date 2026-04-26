@@ -1,12 +1,11 @@
 import asyncio
 import logging
 import hashlib
-from typing import List
+from typing import List, Optional
 
 import aiohttp
 import feedparser
 from bs4 import BeautifulSoup
-from duckduckgo_search import DDGS
 
 from src.models import NewsDTO
 from src.news.protocol import NewsRepositoryProtocol
@@ -16,169 +15,112 @@ logger = logging.getLogger(__name__)
 
 class RSSCrawler(NewsRepositoryProtocol):
     """
-    Crawler implementation for fetching news from RSS feeds and Web Search.
-    Inherits from NewsRepositoryProtocol for architectural consistency.
+    High-performance RSS Crawler.
+    Fetches multiple feeds concurrently and extracts clean content.
     """
     
     def __init__(self):
-        self.source_name = "Global News Engine"
+        self.source_name = "RSS_Engine"
         self.default_feeds = get_all_feeds()
-        # Cap concurrent HTTP requests to avoid rate limits
-        self._semaphore = asyncio.Semaphore(10)
-        # Timeout for HTTP requests
-        self._timeout = aiohttp.ClientTimeout(total=10)
+        # Limit concurrent connections to 20 to be polite to servers
+        self._semaphore = asyncio.Semaphore(20)
+        self._timeout = aiohttp.ClientTimeout(total=20)
 
     def _generate_article_id(self, url: str) -> str:
-        """Create a unique MD5 hash from the article URL."""
+        """MD5 hash of URL for unique identification."""
         return hashlib.md5(url.encode('utf-8')).hexdigest()
 
+    def _clean_html(self, html_content: str) -> str:
+        """Strip all HTML tags and return clean text."""
+        if not html_content:
+            return ""
+        soup = BeautifulSoup(html_content, "html.parser")
+        text = soup.get_text(separator=' ')
+        return " ".join(text.split())
+
     async def _fetch_full_content(self, session: aiohttp.ClientSession, url: str) -> str:
-        """
-        Fetch HTML page and extract main text content.
-        Uses a semaphore to limit concurrent requests.
-        """
+        """Fetch and extract main article text from a URL."""
         async with self._semaphore:
             try:
-                async with session.get(url) as response:
+                async with session.get(url, timeout=10) as response:
                     if response.status != 200:
                         return ""
                     html = await response.text()
-
-                    # Parse HTML
                     soup = BeautifulSoup(html, "html.parser")
-
-                    # Strip unwanted tags
+                    
+                    # Remove junk
                     for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
                         tag.decompose()
 
-                    # Try to find the main article tag, fallback to body
-                    main_content = soup.find("article")
-                    if not main_content:
-                        main_content = soup.find("body")
-                    
-                    if not main_content:
+                    # Focus on main content
+                    content_node = soup.find("article") or soup.find("body")
+                    if not content_node:
                         return ""
-
-                    # Extract text and compress whitespace
-                    text = main_content.get_text(separator=' ')
-                    text = " ".join(text.split())
-
-                    # Truncate to first 5000 chars to save memory and context window
-                    return text[:5000]
-
-            except Exception as e:
-                logger.debug(f"Failed to fetch content for {url}: {e}")
+                        
+                    return " ".join(content_node.get_text(separator=' ').split())[:5000]
+            except Exception:
                 return ""
 
-    async def _process_feed(self, session: aiohttp.ClientSession, url: str) -> List[NewsDTO]:
-        """Fetch and parse a single RSS feed, extract full content for its entries."""
+    async def _process_single_feed(self, session: aiohttp.ClientSession, url: str) -> List[NewsDTO]:
+        """Fetch and parse one RSS feed concurrently."""
         articles = []
         try:
-            # 1. Fetch RSS XML
             async with self._semaphore:
                 async with session.get(url) as response:
                     if response.status != 200:
                         return []
-                    xml_content = await response.text()
+                    xml_data = await response.text()
 
-            # 2. Parse XML (CPU bound, but fast enough for feedparser)
-            feed = feedparser.parse(xml_content)
+            # Parse RSS structure
+            feed = feedparser.parse(xml_data)
             source_title = feed.feed.get('title', 'UNKNOWN_SOURCE')
             
-            # 3. Fetch full content for all entries concurrently
-            entries = feed.entries
-            
-            async def process_entry(entry) -> NewsDTO | None:
-                article_url = entry.get('link', '')
-                if not article_url:
-                    return None
-                    
-                full_content = await self._fetch_full_content(session, article_url)
-                summary = entry.get('summary', 'NO_SUMMARY')
+            # Create tasks for all entries in this feed
+            for entry in feed.entries:
+                link = entry.get('link', '')
+                if not link:
+                    continue
                 
-                # Fallback to summary if full content fails
-                raw_content = full_content if full_content else summary
+                summary_raw = entry.get('summary', '')
+                clean_summary = self._clean_html(summary_raw)
                 
-                return NewsDTO(
-                    article_id=self._generate_article_id(article_url),
+                # Note: We are NOT fetching full content here for all 2000+ items 
+                # to save bandwidth. Full content can be fetched on-demand (Deep-dive).
+                articles.append(NewsDTO(
+                    article_id=self._generate_article_id(link),
                     title=entry.get('title', 'NO_TITLE'),
-                    url=article_url,
+                    url=link,
                     source=source_title,
-                    summary=summary,
+                    summary=clean_summary,
                     published_at=entry.get('published', 'NO_DATE'),
-                    raw_content=raw_content
-                )
-
-            # Gather all entries for this feed
-            results = await asyncio.gather(*(process_entry(e) for e in entries), return_exceptions=True)
-            for res in results:
-                if isinstance(res, NewsDTO):
-                    articles.append(res)
-                
+                    raw_content=clean_summary # Initial content is the summary
+                ))
         except Exception as e:
-            logger.debug(f"Failed to process feed {url}: {e}")
+            logger.debug(f"Error processing feed {url}: {e}")
             
         return articles
 
-    async def fetch_from_feeds(self, feeds: list[str]) -> list[NewsDTO]:
-        """Fetch news from RSS feeds concurrently and extract full text."""
+    async def fetch_from_feeds(self, feeds: List[str]) -> List[NewsDTO]:
+        """Main entry point: Fetch all feeds in parallel."""
         target_feeds = feeds if feeds else self.default_feeds
+        all_results = []
         
-        logger.info(f"Initiating news crawl from {len(target_feeds)} sources concurrently.")
+        logger.info(f"Starting parallel fetch for {len(target_feeds)} feeds.")
         
-        all_articles: List[NewsDTO] = []
-        
-        # Use a single ClientSession for connection pooling
         async with aiohttp.ClientSession(timeout=self._timeout) as session:
-            # Gather all feed parsing tasks
-            tasks = [self._process_feed(session, url) for url in target_feeds]
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+            # Gather all feed processing tasks
+            tasks = [self._process_single_feed(session, url) for url in target_feeds]
+            feed_results = await asyncio.gather(*tasks, return_exceptions=True)
             
-            for res in results:
+            for res in feed_results:
                 if isinstance(res, list):
-                    all_articles.extend(res)
+                    all_results.extend(res)
                     
-        return all_articles
+        return all_results
 
-    async def search_web(self, query: str, limit: int = 5) -> list[NewsDTO]:
-        """Perform ad-hoc web search and optionally fetch full content."""
-        results = []
-        
-        def ddg_sync():
-            with DDGS() as ddgs:
-                return list(ddgs.news(query, max_results=limit))
-
-        try:
-            # Run blocking DDGS in a thread
-            search_results = await asyncio.to_thread(ddg_sync)
-            
-            # Fetch full content for the search results
-            async with aiohttp.ClientSession(timeout=self._timeout) as session:
-                async def process_search_result(r) -> NewsDTO | None:
-                    url = r.get('url', '')
-                    if not url: return None
-                    
-                    full_content = await self._fetch_full_content(session, url)
-                    summary = r.get('body', 'NO_SUMMARY')
-                    raw_content = full_content if full_content else summary
-                    
-                    return NewsDTO(
-                        article_id=self._generate_article_id(url),
-                        title=r.get('title', 'NO_TITLE'),
-                        url=url,
-                        source=r.get('source', 'DUCKDUCKGO'),
-                        summary=summary,
-                        published_at=r.get('date', 'NO_DATE'),
-                        raw_content=raw_content
-                    )
-                
-                tasks = [process_search_result(r) for r in search_results]
-                gathered = await asyncio.gather(*tasks, return_exceptions=True)
-                for res in gathered:
-                    if isinstance(res, NewsDTO):
-                        results.append(res)
-                        
-        except Exception as e:
-            logger.error(f"DuckDuckGo search failed for query '{query}': {str(e)}")
-            
-        return results
+    async def search_web(self, query: str, limit: int = 5) -> List[NewsDTO]:
+        """
+        Placeholder for web search. 
+        Will implement local database search in Phase 4.
+        """
+        return []

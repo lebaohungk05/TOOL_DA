@@ -1,7 +1,8 @@
 import asyncio
 import logging
 import hashlib
-from typing import List
+import re
+from typing import List, Optional
 
 import aiohttp
 import feedparser
@@ -17,7 +18,7 @@ logger = logging.getLogger(__name__)
 class RSSCrawler(NewsRepositoryProtocol):
     """
     Crawler implementation for fetching news from RSS feeds and Web Search.
-    Inherits from NewsRepositoryProtocol for architectural consistency.
+    Supports high-concurrency fetching and dynamic Regex-based filtering.
     """
     
     def __init__(self):
@@ -33,10 +34,7 @@ class RSSCrawler(NewsRepositoryProtocol):
         return hashlib.md5(url.encode('utf-8')).hexdigest()
 
     async def _fetch_full_content(self, session: aiohttp.ClientSession, url: str) -> str:
-        """
-        Fetch HTML page and extract main text content.
-        Uses a semaphore to limit concurrent requests.
-        """
+        """Fetch HTML page and extract main text content using BeautifulSoup."""
         async with self._semaphore:
             try:
                 async with session.get(url) as response:
@@ -44,60 +42,40 @@ class RSSCrawler(NewsRepositoryProtocol):
                         return ""
                     html = await response.text()
 
-                    # Parse HTML
                     soup = BeautifulSoup(html, "html.parser")
-
-                    # Strip unwanted tags
                     for tag in soup(["script", "style", "nav", "footer", "header", "aside"]):
                         tag.decompose()
 
-                    # Try to find the main article tag, fallback to body
-                    main_content = soup.find("article")
-                    if not main_content:
-                        main_content = soup.find("body")
-                    
+                    main_content = soup.find("article") or soup.find("body")
                     if not main_content:
                         return ""
 
-                    # Extract text and compress whitespace
                     text = main_content.get_text(separator=' ')
-                    text = " ".join(text.split())
-
-                    # Truncate to first 5000 chars to save memory and context window
-                    return text[:5000]
+                    return " ".join(text.split())[:5000]
 
             except Exception as e:
                 logger.debug(f"Failed to fetch content for {url}: {e}")
                 return ""
 
     async def _process_feed(self, session: aiohttp.ClientSession, url: str) -> List[NewsDTO]:
-        """Fetch and parse a single RSS feed, extract full content for its entries."""
+        """Process a single RSS feed and fetch full content for entries."""
         articles = []
         try:
-            # 1. Fetch RSS XML
             async with self._semaphore:
                 async with session.get(url) as response:
                     if response.status != 200:
                         return []
                     xml_content = await response.text()
 
-            # 2. Parse XML (CPU bound, but fast enough for feedparser)
             feed = feedparser.parse(xml_content)
             source_title = feed.feed.get('title', 'UNKNOWN_SOURCE')
             
-            # 3. Fetch full content for all entries concurrently
-            entries = feed.entries
-            
             async def process_entry(entry) -> NewsDTO | None:
                 article_url = entry.get('link', '')
-                if not article_url:
-                    return None
+                if not article_url: return None
                     
                 full_content = await self._fetch_full_content(session, article_url)
                 summary = entry.get('summary', 'NO_SUMMARY')
-                
-                # Fallback to summary if full content fails
-                raw_content = full_content if full_content else summary
                 
                 return NewsDTO(
                     article_id=self._generate_article_id(article_url),
@@ -106,11 +84,10 @@ class RSSCrawler(NewsRepositoryProtocol):
                     source=source_title,
                     summary=summary,
                     published_at=entry.get('published', 'NO_DATE'),
-                    raw_content=raw_content
+                    raw_content=full_content if full_content else summary
                 )
 
-            # Gather all entries for this feed
-            results = await asyncio.gather(*(process_entry(e) for e in entries), return_exceptions=True)
+            results = await asyncio.gather(*(process_entry(e) for e in feed.entries), return_exceptions=True)
             for res in results:
                 if isinstance(res, NewsDTO):
                     articles.append(res)
@@ -120,39 +97,34 @@ class RSSCrawler(NewsRepositoryProtocol):
             
         return articles
 
-    async def fetch_from_feeds(self, feeds: list[str]) -> list[NewsDTO]:
-        """Fetch news from RSS feeds concurrently and extract full text."""
+    async def fetch_from_feeds(self, feeds: list[str], 
+                               follow_keywords: list[str] = None, 
+                               block_keywords: list[str] = None) -> list[NewsDTO]:
+        """Fetch news from RSS feeds with high concurrency and apply filtering."""
         target_feeds = feeds if feeds else self.default_feeds
-        
-        logger.info(f"Initiating news crawl from {len(target_feeds)} sources concurrently.")
+        logger.info(f"Initiating concurrent crawl from {len(target_feeds)} sources.")
         
         all_articles: List[NewsDTO] = []
         
-        # Use a single ClientSession for connection pooling
         async with aiohttp.ClientSession(timeout=self._timeout) as session:
-            # Gather all feed parsing tasks
             tasks = [self._process_feed(session, url) for url in target_feeds]
             results = await asyncio.gather(*tasks, return_exceptions=True)
-            
             for res in results:
                 if isinstance(res, list):
                     all_articles.extend(res)
                     
-        return all_articles
+        # Apply dynamic filtering logic
+        return self._filter_logic(all_articles, follow_keywords or [], block_keywords or [])
 
     async def search_web(self, query: str, limit: int = 5) -> list[NewsDTO]:
-        """Perform ad-hoc web search and optionally fetch full content."""
+        """Perform ad-hoc web search using DuckDuckGo."""
         results = []
-        
         def ddg_sync():
             with DDGS() as ddgs:
                 return list(ddgs.news(query, max_results=limit))
 
         try:
-            # Run blocking DDGS in a thread
             search_results = await asyncio.to_thread(ddg_sync)
-            
-            # Fetch full content for the search results
             async with aiohttp.ClientSession(timeout=self._timeout) as session:
                 async def process_search_result(r) -> NewsDTO | None:
                     url = r.get('url', '')
@@ -160,7 +132,6 @@ class RSSCrawler(NewsRepositoryProtocol):
                     
                     full_content = await self._fetch_full_content(session, url)
                     summary = r.get('body', 'NO_SUMMARY')
-                    raw_content = full_content if full_content else summary
                     
                     return NewsDTO(
                         article_id=self._generate_article_id(url),
@@ -169,7 +140,7 @@ class RSSCrawler(NewsRepositoryProtocol):
                         source=r.get('source', 'DUCKDUCKGO'),
                         summary=summary,
                         published_at=r.get('date', 'NO_DATE'),
-                        raw_content=raw_content
+                        raw_content=full_content if full_content else summary
                     )
                 
                 tasks = [process_search_result(r) for r in search_results]
@@ -179,6 +150,33 @@ class RSSCrawler(NewsRepositoryProtocol):
                         results.append(res)
                         
         except Exception as e:
-            logger.error(f"DuckDuckGo search failed for query '{query}': {str(e)}")
+            logger.error(f"Search failed for query '{query}': {str(e)}")
             
         return results
+
+    def _filter_logic(self, articles: List[NewsDTO], follow: List[str], block: List[str]) -> List[NewsDTO]:
+        """Filter articles based on block list and prioritize followed keywords using Regex."""
+        if not follow and not block:
+            return articles
+
+        block_patterns = [re.compile(rf"\b{re.escape(kw.lower())}\b") for kw in block]
+        follow_patterns = [re.compile(rf"\b{re.escape(kw.lower())}\b") for kw in follow]
+        
+        prioritized = []
+        normal = []
+
+        for article in articles:
+            # Check both title and content/summary for keywords
+            content_to_check = (article.title + " " + article.summary).lower()
+            
+            # Exclusion logic (Block)
+            if any(p.search(content_to_check) for p in block_patterns):
+                continue
+            
+            # Prioritization logic (Follow)
+            if any(p.search(content_to_check) for p in follow_patterns):
+                prioritized.append(article)
+            else:
+                normal.append(article)
+                
+        return prioritized + normal

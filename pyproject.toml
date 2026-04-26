@@ -9,8 +9,9 @@ dependencies = [
     "aiosqlite>=0.22.1",
     "apscheduler>=3.11.2",
     "beautifulsoup4>=4.14.3",
-    "duckduckgo-search>=8.1.1",
+    "ddgs>=9.14.1",
     "feedparser>=6.0.12",
+    "groq>=1.2.0",
     "ollama>=0.6.1",
     "python-dotenv>=1.2.2",
 ]

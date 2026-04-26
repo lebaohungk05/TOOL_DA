@@ -6,7 +6,7 @@ from typing import List
 import aiohttp
 import feedparser
 from bs4 import BeautifulSoup
-from duckduckgo_search import DDGS
+from ddgs import DDGS
 
 from src.models import NewsDTO
 from src.news.protocol import NewsRepositoryProtocol

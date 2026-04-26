@@ -212,3 +212,56 @@ class BriefingService(BriefingServiceProtocol):
         except Exception as e:
             logger.error(f"Error during deep-dive workflow: {str(e)}")
             await self.messenger.notify_event(recipient_id, "error_deep_dive", language=lang)
+
+    async def run_ad_hoc_query(self, recipient_id: str, query: str) -> None:
+        """
+        Execute a free-form search query requested by the user.
+        
+        Args:
+            recipient_id: The unique ID of the recipient.
+            query: The raw query from the user.
+        """
+        logger.info(f"Starting ad-hoc search for recipient {recipient_id}: {query}")
+        lang = "vi"
+
+        try:
+            # 1. Fetch user config
+            user_config = await self.storage.get_user_config(user_id=recipient_id)
+            if user_config:
+                lang = user_config.language
+
+            # 2. Notify User
+            await self.messenger.notify_event(recipient_id, "ad_hoc_searching", language=lang)
+
+            # 3. Optimize queries and search web
+            keywords = await self.ai_service.extract_search_queries(query, lang)
+            search_term = keywords[0] if keywords else query
+            
+            logger.info(f"Searching web for term: {search_term}")
+            raw_results = await self.news_repo.search_web(search_term)
+            
+            if not raw_results:
+                await self.messenger.notify_event(recipient_id, "error_system", language=lang)
+                return
+                
+            # Limit to 3 for brevity
+            articles = raw_results[:3]
+
+            # 4. Summarize and Archive
+            final_news = []
+            import dataclasses
+            for item in articles:
+                ai_summary = await self.ai_service.summarize_news(item.summary, lang)
+                new_item = dataclasses.replace(item, summary=ai_summary)
+                final_news.append(new_item)
+                
+            await self.storage.archive_news_items(final_news)
+
+            # 5. Push exact same briefing payload
+            await self.messenger.send_briefing(recipient_id, final_news, lang)
+            logger.info(f"Completed ad-hoc query for recipient {recipient_id}")
+
+        except Exception as e:
+            logger.error(f"Error during ad-hoc workflow: {str(e)}")
+            await self.messenger.notify_event(recipient_id, "error_system", language=lang)
+

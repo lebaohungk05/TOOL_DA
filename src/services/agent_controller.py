@@ -84,10 +84,8 @@ class AgentController(AgentControllerProtocol):
             )
             return
 
-        # 4. Fallback: ad-hoc not implemented
-        await self.messenger.notify_event(
-            recipient_id, "ad_hoc_not_implemented", language="vi"
-        )
+        # 4. Fallback: Ad-hoc free search
+        await self.briefing_service.run_ad_hoc_query(recipient_id, stripped)
 
     async def handle_interaction(
         self, recipient_id: str, action_id: str, payload: dict[str, Any]

@@ -17,7 +17,7 @@ I18N: dict[str, dict[str, str]] = {
         "error_deep_dive": "⚠️ Có lỗi xảy ra khi xử lý yêu cầu tìm hiểu sâu của bạn.",
         "focus_mode_entered": "🔍 Bạn đang trong chế độ tập trung. Hãy đặt câu hỏi về tin này, hoặc bấm nút kết thúc.",
         "focus_mode_exited": "✅ Đã thoát chế độ tập trung.",
-        "ad_hoc_not_implemented": "🚧 Tính năng tìm kiếm tự do chưa được triển khai. Hãy chờ bản tin tiếp theo!",
+        "ad_hoc_searching": "🔍 Đang tìm kiếm thông tin cho yêu cầu của bạn...",
         "settings_not_implemented": "🚧 Tính năng cài đặt đang được phát triển.",
         
         # Onboarding
@@ -72,7 +72,7 @@ I18N: dict[str, dict[str, str]] = {
         "error_deep_dive": "⚠️ Error processing your deep-dive request.",
         "focus_mode_entered": "🔍 You are now in Focus Mode. Ask questions about this article, or press the exit button.",
         "focus_mode_exited": "✅ Exited Focus Mode.",
-        "ad_hoc_not_implemented": "🚧 Ad-hoc search is not yet implemented. Please wait for your next briefing!",
+        "ad_hoc_searching": "🔍 Searching the web for your request...",
         "settings_not_implemented": "🚧 Settings feature is under development.",
         
         # Onboarding

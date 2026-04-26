@@ -39,6 +39,11 @@ ENV/
 data/
 *.db
 *.log
+.gtd/
+gtd-temp/
+update_log.ps1
+test_*.py
+verify_*.py
 
 # System files
 .DS_Store

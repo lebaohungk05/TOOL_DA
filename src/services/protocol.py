@@ -38,3 +38,13 @@ class BriefingServiceProtocol(Protocol):
             question: The specific question asked by the user.
         """
         ...
+
+    async def run_ad_hoc_query(self, recipient_id: str, query: str) -> None:
+        """
+        Execute a free-form search query requested by the user.
+
+        Args:
+            recipient_id: The recipient ID.
+            query: The raw text query submitted by the user.
+        """
+        ...

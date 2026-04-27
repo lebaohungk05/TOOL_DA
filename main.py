@@ -23,7 +23,8 @@ from src.bot.telegram_messenger import TelegramMessenger
 from src.bot.telegram_handlers import register_handlers
 from src.bot.scheduler import BriefingScheduler
 from src.database.sqlite_storage import SQLiteStorage
-from src.ai.ollama_service import OllamaAIService
+from src.ai import AIService
+from src.ai.providers import get_provider
 from src.news.rss_crawler import RSSCrawler
 
 # Core
@@ -55,7 +56,9 @@ async def main() -> None:
 
     bot = Bot(token=token)
     messenger = TelegramMessenger(bot=bot)
-    ai_service = OllamaAIService()  # reads OLLAMA_MODEL/HOST from env
+    
+    llm_provider = get_provider()
+    ai_service = AIService(provider=llm_provider)
     news_repo = RSSCrawler()
 
     # --- Instantiate Core ---

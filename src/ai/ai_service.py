@@ -34,17 +34,15 @@ class AIService(AIServiceProtocol):
         messages = [{"role": "user", "content": prompt}]
         return await self.provider.chat(messages)
 
-    async def extract_search_queries(self, user_prompt: str, language: str = "vi") -> list[str]:
+    async def extract_search_queries(self, user_prompt: str, language: str = "vi") -> str:
         """
-        Extract search keywords from a user prompt.
+        Produce a single search-optimized string.
         """
         prompt = get_text("prompt_query_designer", language, user_prompt=user_prompt)
         messages = [{"role": "user", "content": prompt}]
         response = await self.provider.chat(messages)
         
-        # Post-processing: Split by comma and clean up
-        keywords = [kw.strip() for kw in response.split(",") if kw.strip()]
-        return keywords[:5]
+        return response.strip().strip('"')
 
     def _format_articles(self, articles: list[NewsDTO]) -> str:
         """Format articles into a text block for the LLM."""

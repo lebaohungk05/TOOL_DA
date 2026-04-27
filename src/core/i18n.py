@@ -43,10 +43,10 @@ I18N: dict[str, dict[str, str]] = {
             "Nội dung: {content}"
         ),
         "prompt_query_designer": (
-            "Nhiệm vụ: Trích xuất từ 3 đến 5 từ khóa tìm kiếm chính từ yêu cầu của người dùng sau đây để tìm các bài báo liên quan. "
-            "Yêu cầu: CHỈ trả về danh sách các từ khóa cách nhau bằng dấu phẩy. Không đánh số, không có văn bản giới thiệu. "
-            "Ngôn ngữ: Thực hiện bằng tiếng Việt.\n\n"
-            "Yêu cầu của người dùng: {user_prompt}"
+            "Nhiệm vụ: Viết một câu truy vấn tìm kiếm Google duy nhất để tìm câu trả lời cho yêu cầu của người dùng. "
+            "Ràng buộc: CHỈ trả về chuỗi tìm kiếm. Không có ngoặc kép, không có văn bản thừa. "
+            "Ngôn ngữ: Trả lời bằng tiếng Việt.\n\n"
+            "Yêu cầu: {user_prompt}"
         ),
         "prompt_synthesizer": (
             "Nhiệm vụ: Trả lời câu hỏi dựa trên các bài báo được cung cấp. "
@@ -98,10 +98,10 @@ I18N: dict[str, dict[str, str]] = {
             "Content: {content}"
         ),
         "prompt_query_designer": (
-            "Task: Extract 3 to 5 key search terms from the following user request to help find relevant news articles. "
-            "Constraint: Return ONLY a comma-separated list of keywords. No numbering, no introductory text. "
+            "Task: Write a single Google search query to find news related to the user's request. "
+            "Constraint: Return ONLY the search string. No quotes, no prose. "
             "Language: Perform in English.\n\n"
-            "User Request: {user_prompt}"
+            "Request: {user_prompt}"
         ),
         "prompt_synthesizer": (
             "Task: Answer the question based on the provided articles. "

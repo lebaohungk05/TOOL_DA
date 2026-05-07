@@ -30,10 +30,11 @@ from src.news.rss_crawler import RSSCrawler
 # Core
 from src.services.agent_controller import AgentController
 from src.services.briefing_service import BriefingService
+from src.news.fetchers.smart_fetcher import SmartFetcher
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
@@ -59,7 +60,9 @@ async def main() -> None:
     
     llm_provider = get_provider()
     ai_service = AIService(provider=llm_provider)
-    news_repo = RSSCrawler()
+    
+    fetcher = SmartFetcher()
+    news_repo = RSSCrawler(fetcher=fetcher)
 
     # --- Instantiate Core ---
     briefing_service = BriefingService(

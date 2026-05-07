@@ -182,17 +182,23 @@ class BriefingService(BriefingServiceProtocol):
 
             # 3. Extract Search Queries
             try:
-                queries = await self.ai_service.extract_search_queries(question, lang)
-                if not queries:
-                    queries = [original_article.title]
+                # Wrap full article context into the user prompt for high-quality extraction
+                context = f"Title: {original_article.title}\nSummary: {original_article.summary}"
+                enriched_prompt = f"### CONTEXT ###\n{context}\n\n### USER QUESTION ###\n{question}"
+                
+                search_term = await self.ai_service.extract_search_queries(enriched_prompt, lang)
+                if not search_term:
+                    search_term = original_article.title
+                logger.info(f"Deep-dive: AI generated search query for {recipient_id}: {search_term}")
             except Exception as e:
                 logger.warning(f"AI query extraction failed: {e}")
-                queries = [original_article.title]
+                search_term = original_article.title
 
             # 4. Web Search for contextual enrichment
             web_results = []
             try:
-                web_results = await self.news_repo.search_web(queries[0])
+                logger.info(f"Deep-dive: Searching web for {recipient_id} using term: {search_term}")
+                web_results = await self.news_repo.search_web(search_term)
             except Exception as e:
                 logger.error(f"Web search failed: {e}")
 
@@ -234,10 +240,11 @@ class BriefingService(BriefingServiceProtocol):
             await self.messenger.notify_event(recipient_id, "ad_hoc_searching", language=lang)
 
             # 3. Optimize queries and search web
-            keywords = await self.ai_service.extract_search_queries(query, lang)
-            search_term = keywords[0] if keywords else query
+            search_term = await self.ai_service.extract_search_queries(query, lang)
+            if not search_term:
+                search_term = query
             
-            logger.info(f"Searching web for term: {search_term}")
+            logger.info(f"Ad-hoc: Searching web for term: {search_term}")
             raw_results = await self.news_repo.search_web(search_term)
             
             if not raw_results:

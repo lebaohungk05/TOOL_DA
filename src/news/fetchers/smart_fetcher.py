@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from src.news.fetchers.protocol import ContentFetcherProtocol
-from src.news.fetchers.aiohttp_fetcher import AioHttpFetcher
+from src.news.fetchers.bypass_fetcher import BypassFetcher
 
 logger = logging.getLogger(__name__)
 
@@ -11,8 +11,8 @@ class SmartFetcher(ContentFetcherProtocol):
     """
 
     def __init__(self):
-        self.basic = AioHttpFetcher()
-        self.browser = AioHttpFetcher()
+        self.basic = BypassFetcher()
+        self.browser = BypassFetcher()
         # Domains known to block simple scraping
         self.hard_domains = ["reuters.com", "bloomberg.com", "nytimes.com"]
 

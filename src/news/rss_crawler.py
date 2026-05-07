@@ -1,12 +1,12 @@
-import asyncio
-import logging
 import hashlib
-from typing import List
-
+import re
+import logging
+import asyncio
 import aiohttp
+from typing import List
+from curl_cffi.requests import AsyncSession
 import feedparser
 from bs4 import BeautifulSoup
-from ddgs import DDGS
 
 from src.models import NewsDTO
 from src.news.protocol import NewsRepositoryProtocol
@@ -80,53 +80,77 @@ class RSSCrawler(NewsRepositoryProtocol):
 
     async def fetch_from_feeds(self, feeds: list[str]) -> list[NewsDTO]:
         """Fetch news from RSS feeds concurrently."""
-        target_feeds = feeds if feeds else self.default_feeds
+        # Handle the placeholder used in the briefing service
+        if not feeds or feeds == ["default_rss"]:
+            target_feeds = self.default_feeds
+        else:
+            target_feeds = feeds
+            
         logger.info(f"Initiating news crawl from {len(target_feeds)} sources.")
 
         all_articles: List[NewsDTO] = []
         async with aiohttp.ClientSession(timeout=self._timeout) as session:
             tasks = [self._process_feed(session, url) for url in target_feeds]
             results = await asyncio.gather(*tasks, return_exceptions=True)
-            for res in results:
+            for i, res in enumerate(results):
                 if isinstance(res, list):
                     all_articles.extend(res)
+                else:
+                    logger.error(f"Error crawling feed {target_feeds[i]}: {res}")
+        
+        logger.info(f"Crawl completed. Found {len(all_articles)} total items.")
         return all_articles
 
     async def search_web(self, query: str, limit: int = 5) -> list[NewsDTO]:
-        """Perform ad-hoc web search and fetch full content via fetcher."""
-        def ddg_sync():
-            with DDGS() as ddgs:
-                return list(ddgs.news(query, max_results=limit))
-
+        """Perform ad-hoc search via Google News RSS (Very stable)."""
+        clean_query = query.replace("2026", "").strip()
+        logger.info(f"Searching Google News RSS for: {clean_query}")
+        
+        # Google News RSS Search URL (Vietnamese Market)
+        # hl=vi (Vietnamese), gl=VN (Vietnam), ceid=VN:vi
+        rss_url = f"https://news.google.com/rss/search?q={clean_query.replace(' ', '+')}&hl=vi&gl=VN&ceid=VN:vi"
+        
         try:
-            search_results = await asyncio.to_thread(ddg_sync)
-            urls = [r.get('url', '') for r in search_results if r.get('url')]
+            async with aiohttp.ClientSession(timeout=self._timeout) as session:
+                async with session.get(rss_url) as response:
+                    if response.status != 200:
+                        logger.error(f"Google News RSS failed with status {response.status}")
+                        return []
+                    xml_content = await response.text()
+
+            feed = feedparser.parse(xml_content)
+            entries = feed.entries[:limit]
             
-            # Fetch in batch
+            if not entries:
+                logger.warning(f"No results in Google News RSS for: {clean_query}")
+                return []
+
+            # Collect URLs and fetch full contents
+            urls = [e.get('link', '') for e in entries if e.get('link')]
             full_contents = await self.fetcher.fetch_contents(urls)
             content_map = dict(zip(urls, full_contents))
 
             results = []
-            for r in search_results:
-                url = r.get('url', '')
-                if not url:
-                    continue
+            for entry in entries:
+                url = entry.get('link', '')
+                if not url: continue
                 
                 raw_content = content_map.get(url, "")
-                summary = r.get('body', 'NO_SUMMARY')
+                # Google News RSS description is often just a snippet
+                summary = entry.get('summary', entry.get('title', ''))
 
                 results.append(NewsDTO(
                     article_id=self._generate_article_id(url),
-                    title=r.get('title', 'NO_TITLE'),
+                    title=entry.get('title', 'NO_TITLE'),
                     url=url,
-                    source=r.get('source', 'DUCKDUCKGO'),
+                    source=entry.get('source', {}).get('title', 'Google News'),
                     summary=summary,
-                    published_at=r.get('date', 'NO_DATE'),
+                    published_at=entry.get('published', 'TODAY'),
                     raw_content=raw_content if raw_content else summary
                 ))
             return results
 
         except Exception as e:
-            logger.error(f"DuckDuckGo search failed: {e}")
+            logger.error(f"Google News RSS Search failed: {e}")
             return []
 

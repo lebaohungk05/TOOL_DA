@@ -39,6 +39,11 @@ ENV/
 data/
 *.db
 *.log
+scripts/
+test_*.py
+verify_*.py
+compare_fetchers.py
+*.test.py
 
 # System files
 .DS_Store

@@ -4,7 +4,6 @@ import logging
 import asyncio
 import aiohttp
 from typing import List
-from curl_cffi.requests import AsyncSession
 import feedparser
 from bs4 import BeautifulSoup
 

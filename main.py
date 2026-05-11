@@ -26,11 +26,11 @@ from src.database.sqlite_storage import SQLiteStorage
 from src.ai import AIService
 from src.ai.providers import get_provider
 from src.news.rss_crawler import RSSCrawler
+from src.news.fetchers.aiohttp_fetcher import AioHttpFetcher
 
 # Core
 from src.services.agent_controller import AgentController
 from src.services.briefing_service import BriefingService
-from src.news.fetchers.smart_fetcher import SmartFetcher
 
 # Configure logging
 logging.basicConfig(
@@ -61,7 +61,7 @@ async def main() -> None:
     llm_provider = get_provider()
     ai_service = AIService(provider=llm_provider)
     
-    fetcher = SmartFetcher()
+    fetcher = AioHttpFetcher()
     news_repo = RSSCrawler(fetcher=fetcher)
 
     # --- Instantiate Core ---

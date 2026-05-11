@@ -18,7 +18,6 @@ I18N: dict[str, dict[str, str]] = {
         "focus_mode_entered": "🔍 Bạn đang trong chế độ tập trung. Hãy đặt câu hỏi về tin này, hoặc bấm nút kết thúc.",
         "focus_mode_exited": "✅ Đã thoát chế độ tập trung.",
         "ad_hoc_searching": "🔍 Đang tìm kiếm thông tin cho yêu cầu của bạn...",
-        "ad_hoc_searching_live": "🌐 Không tìm thấy trong kho tin, đang mở rộng tìm kiếm trên Internet...",
         "settings_not_implemented": "🚧 Tính năng cài đặt đang được phát triển.",
         
         # Onboarding

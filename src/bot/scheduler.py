@@ -1,6 +1,5 @@
 import logging
 import datetime
-import pytz
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
@@ -33,7 +32,6 @@ class BriefingScheduler:
         self.briefing_service = briefing_service
         self.storage = storage
         self._scheduler = AsyncIOScheduler()
-        self._timezone = pytz.timezone("Asia/Ho_Chi_Minh")
 
     async def start(self) -> None:
         """Start the scheduler with 1-minute interval checks."""
@@ -44,22 +42,18 @@ class BriefingScheduler:
             replace_existing=True,
         )
         self._scheduler.start()
-        logger.info(f"BriefingScheduler started (1-minute interval, TZ: {self._timezone})")
 
     async def stop(self) -> None:
         """Shut down the scheduler gracefully."""
         self._scheduler.shutdown(wait=False)
-        logger.info("BriefingScheduler stopped")
 
     async def _check_and_dispatch(self) -> None:
         """
         Tick function: compare current HH:MM against each user's
         briefing_times and dispatch briefings for matching users.
         """
-        # Get current time in Vietnam timezone
-        now_vn = datetime.datetime.now(self._timezone)
-        current_time = now_vn.strftime("%H:%M")
-        logger.debug(f"Scheduler tick at {current_time} (VN Time)")
+        current_time = datetime.datetime.now().strftime("%H:%M")
+        logger.debug(f"Scheduler tick at {current_time}")
 
         try:
             all_configs = await self.storage.get_all_user_configs()

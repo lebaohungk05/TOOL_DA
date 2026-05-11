@@ -248,35 +248,3 @@ class SQLiteStorage(StorageProtocol):
                 summary=row["summary"] or "",
                 published_at=row["published_at"] or ""
             )
-
-    async def search_news(self, query: str, limit: int = 5, max_age_days: int = 3) -> list[NewsDTO]:
-        """
-        Search for news articles in the local database.
-        Filters by ACTUAL publication date (published_at).
-        """
-        if not self._connection:
-            await self.connect()
-
-        # Filter by published_at (ISO date string)
-        sql = """
-            SELECT * FROM news_articles 
-            WHERE (title LIKE ? OR summary LIKE ?)
-            AND published_at >= datetime('now', ?)
-            ORDER BY published_at DESC 
-            LIMIT ?
-        """
-        params = (f"%{query}%", f"%{query}%", f"-{max_age_days} days", limit)
-
-        articles = []
-        async with self._connection.execute(sql, params) as cursor:
-            async for row in cursor:
-                articles.append(NewsDTO(
-                    article_id=row["article_id"],
-                    title=row["title"],
-                    url=row["url"],
-                    source=row["source"],
-                    raw_content=row["raw_content"] or "",
-                    summary=row["summary"] or "",
-                    published_at=row["published_at"] or ""
-                ))
-        return articles

@@ -240,47 +240,29 @@ class BriefingService(BriefingServiceProtocol):
             await self.messenger.notify_event(recipient_id, "ad_hoc_searching", language=lang)
 
             # 3. Optimize queries and search web
-            search_term = ""
+            search_query = ""
             try:
-                search_term = await self.ai_service.extract_search_queries(query, lang)
-                logger.info(f"Ad-hoc: AI optimized search term: '{search_term}'")
+                search_query = await self.ai_service.extract_search_queries(query, lang)
             except Exception as e:
                 logger.warning(f"AI query extraction failed: {e}")
             
-            # Use original query if AI fails or returns empty
-            final_query = search_term if search_term and len(search_term) > 2 else query
+            final_query = search_query if search_query else query
+            raw_results = await self.news_repo.search_web(final_query, limit=5)
             
-            # STAGING FIX: Strip simulated year '2026' to work with real-world search engines
-            final_query = final_query.replace("2026", "").replace("  ", " ").strip()
-            
-            logger.info(f"Ad-hoc: Searching local database for term: {final_query}")
-            raw_results = await self.storage.search_news(final_query, limit=5, max_age_days=1)
-            
-            # --- LIVE FALLBACK LOGIC ---
-            if not raw_results:
-                logger.info(f"Ad-hoc: No local results for '{final_query}'. Initiating live web search...")
-                await self.messenger.notify_event(recipient_id, "ad_hoc_searching_live", language=lang)
-                
-                # Try optimized query first
-                raw_results = await self.news_repo.search_web(final_query, limit=3)
-                
-                # Fallback to original user query if optimized one failed
-                if not raw_results and final_query != query:
-                    logger.info(f"Ad-hoc: Optimized query '{final_query}' failed. Trying original: '{query}'")
-                    raw_results = await self.news_repo.search_web(query, limit=3)
+            # Fallback to original user query if optimized one failed
+            if not raw_results and final_query != query:
+                logger.info(f"Ad-hoc: Optimized query '{final_query}' failed. Trying original: '{query}'")
+                raw_results = await self.news_repo.search_web(query, limit=5)
             
             if not raw_results:
                 logger.warning(f"Ad-hoc: No news found for query: {query}")
                 await self.messenger.notify_event(recipient_id, "no_news_found", language=lang)
                 return
-                
-            # Limit to 3 for brevity
-            articles = raw_results[:3]
 
             # 4. Summarize and Archive
             final_news = []
             import dataclasses
-            for item in articles:
+            for item in raw_results:
                 # Summarize raw_content if available, otherwise summary
                 content_to_summarize = item.raw_content if (item.raw_content and len(item.raw_content) > 100) else (item.summary or item.title)
                 try:

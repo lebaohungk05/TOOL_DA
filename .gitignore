@@ -44,6 +44,12 @@ test_*.py
 verify_*.py
 compare_fetchers.py
 *.test.py
+scratch/
+.antigravitycli/
+.gtd/
+gtd-temp/
+future_plan.md
+improve_plan.md
 
 # System files
 .DS_Store

@@ -767,6 +767,7 @@ dependencies = [
     { name = "ddgs" },
     { name = "feedparser" },
     { name = "groq" },
+    { name = "httpx" },
     { name = "ollama" },
     { name = "python-dotenv" },
 ]
@@ -780,6 +781,7 @@ requires-dist = [
     { name = "ddgs", specifier = ">=9.14.1" },
     { name = "feedparser", specifier = ">=6.0.12" },
     { name = "groq", specifier = ">=1.2.0" },
+    { name = "httpx", specifier = ">=0.27.0" },
     { name = "ollama", specifier = ">=0.6.1" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
 ]

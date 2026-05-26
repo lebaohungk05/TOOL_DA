@@ -43,9 +43,13 @@ I18N: dict[str, dict[str, str]] = {
             "Nội dung: {content}"
         ),
         "prompt_query_designer": (
-            "Nhiệm vụ: Viết một câu truy vấn tìm kiếm Google duy nhất để tìm câu trả lời cho yêu cầu của người dùng. "
-            "Ràng buộc: CHỈ trả về chuỗi tìm kiếm. Không có ngoặc kép, không có văn bản thừa. "
-            "Ngôn ngữ: Trả lời bằng tiếng Việt.\n\n"
+            "Nhiệm vụ: Trích xuất từ khóa tìm kiếm cốt lõi từ yêu cầu của người dùng.\n"
+            "Ràng buộc:\n"
+            "- Trả về TỐI ĐA 5 từ khóa, cách nhau bởi dấu cách.\n"
+            "- CHỈ trả về các từ khóa, không thêm bất kỳ văn bản nào khác.\n"
+            "- KHÔNG thêm thông tin thời gian (năm, tháng) trừ khi người dùng yêu cầu cụ thể.\n"
+            "- KHÔNG sử dụng toán tử tìm kiếm (site:, OR, dấu ngoặc kép).\n"
+            "- Ưu tiên danh từ riêng và thuật ngữ chuyên ngành.\n\n"
             "Yêu cầu: {user_prompt}"
         ),
         "prompt_synthesizer": (
@@ -98,9 +102,13 @@ I18N: dict[str, dict[str, str]] = {
             "Content: {content}"
         ),
         "prompt_query_designer": (
-            "Task: Write a single Google search query to find news related to the user's request. "
-            "Constraint: Return ONLY the search string. No quotes, no prose. "
-            "Language: Perform in English.\n\n"
+            "Task: Extract core search keywords from the user's request.\n"
+            "Constraints:\n"
+            "- Return a MAXIMUM of 5 keywords, separated by spaces.\n"
+            "- Return ONLY the keywords, with no other text.\n"
+            "- Do NOT add time information (year, month) unless specifically requested by the user.\n"
+            "- Do NOT use search operators (site:, OR, quotes).\n"
+            "- Prioritize proper nouns and specialized terminology.\n\n"
             "Request: {user_prompt}"
         ),
         "prompt_synthesizer": (

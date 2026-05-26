@@ -42,12 +42,10 @@ class BriefingScheduler:
             replace_existing=True,
         )
         self._scheduler.start()
-        logger.info("BriefingScheduler started (1-minute interval)")
 
     async def stop(self) -> None:
         """Shut down the scheduler gracefully."""
         self._scheduler.shutdown(wait=False)
-        logger.info("BriefingScheduler stopped")
 
     async def _check_and_dispatch(self) -> None:
         """
@@ -67,7 +65,7 @@ class BriefingScheduler:
             if current_time in config.briefing_times:
                 logger.info(
                     f"Dispatching scheduled briefing for {config.recipient_id} "
-                    f"at {current_time}"
+                    f"at {current_time} VN"
                 )
                 try:
                     await self.briefing_service.run_scheduled_briefing(

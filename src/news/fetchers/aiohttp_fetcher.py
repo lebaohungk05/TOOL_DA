@@ -19,7 +19,7 @@ class AioHttpFetcher(ContentFetcherProtocol):
             "Accept-Language": "en-US,en;q=0.9",
         }
         self._timeout = aiohttp.ClientTimeout(total=10)
-        self._blacklist = ["msn.com"]
+        self._blacklist = []  # Removed msn.com to allow fetching from MSN news links
 
     async def fetch_contents(self, urls: list[str]) -> list[str]:
         """
@@ -45,18 +45,40 @@ class AioHttpFetcher(ContentFetcherProtocol):
                     html = await response.text()
                     soup = BeautifulSoup(html, "html.parser")
 
-                    for tag in soup(["script", "style", "nav", "footer", "header", "aside", "form", "iframe"]):
+                    # Remove noise
+                    for tag in soup(["script", "style", "nav", "footer", "header", "aside", "form", "iframe", "button"]):
                         tag.decompose()
 
-                    main_content = soup.find("article") or soup.find("main")
+                    main_content = None
+                    
+                    # Site-specific selectors for Vietnamese News
+                    if "vnexpress.net" in url:
+                        main_content = soup.find("article", class_="fck_detail") or soup.find("div", class_="fck_detail")
+                    elif "tuoitre.vn" in url:
+                        main_content = soup.find("div", id="main-detail-body") or soup.find("div", class_="content-fck")
+                    elif "thanhnien.vn" in url:
+                        main_content = soup.find("div", class_="detail-content") or soup.find("div", id="abody")
+                    elif "vietnamnet.vn" in url:
+                        main_content = soup.find("div", class_="maincontent") or soup.find("div", id="contentDetailV1")
+                    elif "msn.com" in url:
+                        # MSN specific structure
+                        main_content = soup.find("div", class_="content-container") or soup.find("article")
+                    
+                    # Fallback to general selectors
                     if not main_content:
+                        main_content = soup.find("article") or soup.find("main")
+                    
+                    if not main_content:
+                        # Find the div with the most text as a last resort
                         candidates = soup.find_all(["div", "section"])
                         if candidates:
+                            # Filter out small divs and those that look like sidebars
                             main_content = max(candidates, key=lambda d: len(d.get_text()), default=None)
 
                     if not main_content:
                         return ""
 
+                    # Clean up the text: remove extra whitespace and newlines
                     text = " ".join(main_content.get_text(separator=' ').split())
                     return text
 

@@ -83,6 +83,15 @@ class SQLiteStorage(StorageProtocol):
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+
+        await self._connection.execute("""
+            CREATE TABLE IF NOT EXISTS feed_selection_cache (
+                keyword TEXT PRIMARY KEY,
+                categories_hash TEXT NOT NULL,
+                selected_feeds_json TEXT NOT NULL,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
         await self._connection.commit()
 
     async def upsert_user_config(self, user_id: str, config: UserConfigDTO) -> None:
@@ -96,6 +105,8 @@ class SQLiteStorage(StorageProtocol):
             "briefing_times": config.briefing_times,
             "name": config.name,
             "language": config.language,
+            "allow_unrelated": getattr(config, "allow_unrelated", True),
+            "custom_feeds": list(getattr(config, "custom_feeds", [])),
         }
         config_json = json.dumps(config_dict)
 
@@ -133,6 +144,8 @@ class SQLiteStorage(StorageProtocol):
                 name=config_data.get("name", ""),
                 briefing_times=config_data.get("briefing_times", []),
                 language=config_data.get("language", "vi"),
+                allow_unrelated=config_data.get("allow_unrelated", True),
+                custom_feeds=config_data.get("custom_feeds", []),
             )
 
     async def save_session_context(self, recipient_id: str, context: dict) -> None:
@@ -187,6 +200,8 @@ class SQLiteStorage(StorageProtocol):
                     name=config_data.get("name", ""),
                     briefing_times=config_data.get("briefing_times", []),
                     language=config_data.get("language", "vi"),
+                    allow_unrelated=config_data.get("allow_unrelated", True),
+                    custom_feeds=config_data.get("custom_feeds", []),
                 ))
         return configs
 
@@ -248,3 +263,41 @@ class SQLiteStorage(StorageProtocol):
                 summary=row["summary"] or "",
                 published_at=row["published_at"] or ""
             )
+
+    async def get_feed_selection_cache(self, keyword: str) -> Optional[dict]:
+        """Retrieve cached feed selection for a keyword."""
+        if not self._connection:
+            await self.connect()
+
+        async with self._connection.execute(
+            "SELECT categories_hash, selected_feeds_json FROM feed_selection_cache WHERE keyword = ?",
+            (keyword,)
+        ) as cursor:
+            row = await cursor.fetchone()
+            if not row:
+                return None
+            return {
+                "categories_hash": row["categories_hash"],
+                "selected_feeds": json.loads(row["selected_feeds_json"])
+            }
+
+    async def save_feed_selection_cache(
+        self, keyword: str, categories_hash: str, selected_feeds: dict[str, list[str]]
+    ) -> None:
+        """Save feed selection cache for a keyword."""
+        if not self._connection:
+            await self.connect()
+
+        selected_feeds_json = json.dumps(selected_feeds)
+        await self._connection.execute(
+            """
+            INSERT INTO feed_selection_cache (keyword, categories_hash, selected_feeds_json, updated_at)
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(keyword) DO UPDATE SET
+                categories_hash = excluded.categories_hash,
+                selected_feeds_json = excluded.selected_feeds_json,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (keyword, categories_hash, selected_feeds_json)
+        )
+        await self._connection.commit()

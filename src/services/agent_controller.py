@@ -5,6 +5,7 @@ from src.models import UserConfigDTO
 from src.services.protocol import AgentControllerProtocol, BriefingServiceProtocol
 from src.database.protocol import StorageProtocol
 from src.bot.protocol import MessengerProtocol
+from src.news.sources import PUBLISHERS, resolve_category_to_url
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +72,9 @@ class AgentController(AgentControllerProtocol):
             return
         if lower.startswith("/block"):
             await self._handle_block(recipient_id, stripped)
+            return
+        if lower.startswith("/unrelated"):
+            await self._handle_unrelated(recipient_id, stripped)
             return
         if lower == "/list":
             await self._handle_list(recipient_id)
@@ -193,7 +197,7 @@ class AgentController(AgentControllerProtocol):
         logger.info(f"Onboarding complete for {recipient_id} (name={name}, lang={language})")
 
     async def _handle_follow(self, recipient_id: str, text: str) -> None:
-        """Parse /follow command and add keyword to user config."""
+        """Parse /follow command, trigger LLM feed routing, and save customized URLs."""
         config = await self.storage.get_user_config(user_id=recipient_id)
         if not config:
             await self.messenger.notify_event(recipient_id, "cmd_user_not_found")
@@ -210,6 +214,28 @@ class AgentController(AgentControllerProtocol):
         if keyword not in updated_follow:
             updated_follow.append(keyword)
 
+        # Trigger dynamic LLM feed routing
+        categories_dict = {pub: info["categories"] for pub, info in PUBLISHERS.items()}
+        logger.info(f"Triggering LLM feed selection for keyword '{keyword}' across categories.")
+        
+        selected_feeds = await self.briefing_service.ai_service.select_related_feeds(
+            keyword, categories_dict, config.language
+        )
+        
+        resolved_urls = []
+        for pub, cats in selected_feeds.items():
+            for cat in cats:
+                try:
+                    url = resolve_category_to_url(pub, cat)
+                    resolved_urls.append(url)
+                except Exception as e:
+                    logger.warning(f"Failed to resolve matched feed {pub}/{cat}: {e}")
+                    
+        # Merge and deduplicate custom feeds
+        existing_feeds = getattr(config, "custom_feeds", [])
+        updated_feeds = list(set(list(existing_feeds) + resolved_urls))
+        logger.info(f"Follow: Resolved {len(resolved_urls)} feed URLs. Total custom feeds: {len(updated_feeds)}")
+
         updated = UserConfigDTO(
             user_id=config.user_id,
             recipient_id=config.recipient_id,
@@ -218,6 +244,8 @@ class AgentController(AgentControllerProtocol):
             name=config.name,
             briefing_times=list(config.briefing_times),
             language=config.language,
+            allow_unrelated=getattr(config, "allow_unrelated", True),
+            custom_feeds=updated_feeds
         )
         await self.storage.upsert_user_config(user_id=recipient_id, config=updated)
         await self.messenger.notify_event(
@@ -250,6 +278,8 @@ class AgentController(AgentControllerProtocol):
             name=config.name,
             briefing_times=list(config.briefing_times),
             language=config.language,
+            allow_unrelated=getattr(config, "allow_unrelated", True),
+            custom_feeds=list(getattr(config, "custom_feeds", []))
         )
         await self.storage.upsert_user_config(user_id=recipient_id, config=updated)
         await self.messenger.notify_event(
@@ -266,6 +296,10 @@ class AgentController(AgentControllerProtocol):
         follow_str = ", ".join(config.follow_keywords) if config.follow_keywords else "—"
         block_str = ", ".join(config.block_keywords) if config.block_keywords else "—"
         times_str = ", ".join(config.briefing_times) if config.briefing_times else "—"
+        
+        allow_unrelated = getattr(config, "allow_unrelated", True)
+        unrelated_str = "Có" if allow_unrelated else "Không"
+        custom_feeds_count = len(getattr(config, "custom_feeds", []))
 
         await self.messenger.notify_event(
             recipient_id,
@@ -274,5 +308,41 @@ class AgentController(AgentControllerProtocol):
             follow=follow_str,
             block=block_str,
             times=times_str,
+            unrelated=unrelated_str,
+            custom_feeds_count=custom_feeds_count,
             language_display=config.language.upper(),
         )
+
+    async def _handle_unrelated(self, recipient_id: str, text: str) -> None:
+        """Parse /unrelated command and configure strict curation toggle."""
+        config = await self.storage.get_user_config(user_id=recipient_id)
+        if not config:
+            await self.messenger.notify_event(recipient_id, "cmd_user_not_found")
+            return
+
+        arg = text[len("/unrelated"):].strip().lower()
+        if arg in ["yes", "y", "true", "on"]:
+            val = True
+        elif arg in ["no", "n", "false", "off"]:
+            val = False
+        else:
+            await self.messenger.notify_event(
+                recipient_id, "cmd_unrelated_invalid", language=config.language
+            )
+            return
+
+        updated = UserConfigDTO(
+            user_id=config.user_id,
+            recipient_id=config.recipient_id,
+            follow_keywords=list(config.follow_keywords),
+            block_keywords=list(config.block_keywords),
+            name=config.name,
+            briefing_times=list(config.briefing_times),
+            language=config.language,
+            allow_unrelated=val,
+            custom_feeds=list(getattr(config, "custom_feeds", []))
+        )
+        await self.storage.upsert_user_config(user_id=recipient_id, config=updated)
+        
+        event_key = "cmd_unrelated_enabled" if val else "cmd_unrelated_disabled"
+        await self.messenger.notify_event(recipient_id, event_key, language=config.language)

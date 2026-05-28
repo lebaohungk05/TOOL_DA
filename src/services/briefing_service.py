@@ -40,28 +40,70 @@ class BriefingService(BriefingServiceProtocol):
         self.messenger = messenger
 
     def _filter_and_prioritize(
-        self, articles: list[NewsDTO], follow: list[str], block: list[str]
+        self, articles: list[NewsDTO], follow: list[str], block: list[str], allow_unrelated: bool = True
     ) -> list[NewsDTO]:
-        """Apply dynamic filtering using regex for exact word matching."""
+        """Apply dynamic filtering using regex with proper-noun capitalization filtering."""
         block_patterns = [re.compile(rf"\b{re.escape(kw.lower())}\b") for kw in block]
-        follow_patterns = [re.compile(rf"\b{re.escape(kw.lower())}\b") for kw in follow]
         
         prioritized = []
         normal = []
 
+        def _is_common_noun_match(text: str, keyword: str, start: int, end: int) -> bool:
+            # If followed keyword itself contains uppercase letters, allow it (e.g. acronyms like 'AI')
+            keyword_clean = keyword.strip()
+            if not keyword_clean.islower():
+                return True
+                
+            matched_substring = text[start:end]
+            if matched_substring.islower():
+                return True
+                
+            # If capitalized in the middle of a sentence, it's a proper noun (e.g. Bộ Khoa học và Công nghệ)
+            preceding = text[:start].rstrip()
+            if not preceding:
+                return True
+            if preceding[-1] in (".", "?", "!", "\n", ":"):
+                return True
+            if preceding[-1] in ('"', "'", ")", "]") and len(preceding) > 1 and preceding[-2] in (".", "?", "!"):
+                return True
+            return False
+
         for article in articles:
-            text = (article.title + " " + article.summary).lower()
+            title_text = article.title
+            summary_text = article.summary
             
             # Exclusion logic
-            if any(p.search(text) for p in block_patterns):
+            full_text_lower = (title_text + " " + summary_text).lower()
+            if any(p.search(full_text_lower) for p in block_patterns):
                 continue
             
             # Inclusion/Prioritization logic
-            if any(p.search(text) for p in follow_patterns):
+            matched = False
+            for kw in follow:
+                kw_lower = kw.lower()
+                p = re.compile(rf"\b{re.escape(kw_lower)}\b", re.IGNORECASE)
+                
+                # Title match is guaranteed pass
+                if p.search(title_text):
+                    matched = True
+                    break
+                    
+                # Summary match requires proper noun filtering
+                for m in p.finditer(summary_text):
+                    if _is_common_noun_match(summary_text, kw_lower, m.start(), m.end()):
+                        matched = True
+                        break
+                if matched:
+                    break
+            
+            if matched:
                 prioritized.append(article)
             else:
                 normal.append(article)
                 
+        if not allow_unrelated:
+            return prioritized
+            
         return prioritized + normal
 
     async def run_scheduled_briefing(self, recipient_id: str) -> None:
@@ -85,13 +127,18 @@ class BriefingService(BriefingServiceProtocol):
             # 1. Fetch user config to get preferences and language
             follow_keywords = []
             block_keywords = []
+            allow_unrelated = True
+            custom_feeds = []
             user_config = await self.storage.get_user_config(user_id=recipient_id)
             if user_config:
                 lang = user_config.language
                 follow_keywords = user_config.follow_keywords
                 block_keywords = user_config.block_keywords
+                allow_unrelated = getattr(user_config, "allow_unrelated", True)
+                custom_feeds = getattr(user_config, "custom_feeds", [])
                 
-            feeds = ["default_rss"] # Mocked feed list for now
+            # Use dynamically routed custom feeds if available, otherwise crawl all
+            feeds = custom_feeds if custom_feeds else ["default_rss"]
             
             # 2. Fetch fresh news
             raw_news = await self.news_repo.fetch_from_feeds(feeds)
@@ -100,7 +147,7 @@ class BriefingService(BriefingServiceProtocol):
                 return
 
             # Apply filtering and prioritization based on user config
-            filtered_news = self._filter_and_prioritize(raw_news, follow_keywords, block_keywords)
+            filtered_news = self._filter_and_prioritize(raw_news, follow_keywords, block_keywords, allow_unrelated)
 
             # Keep top 5
             top_news = filtered_news[:5]

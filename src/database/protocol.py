@@ -89,3 +89,28 @@ class StorageProtocol(Protocol):
             The NewsDTO if found, else None.
         """
         ...
+
+    async def get_feed_selection_cache(self, keyword: str) -> Optional[dict]:
+        """
+        Retrieve cached feed selection for a keyword.
+        
+        Args:
+            keyword: The keyword to search cache for.
+            
+        Returns:
+            A dictionary containing 'categories_hash' and 'selected_feeds' if found, else None.
+        """
+        ...
+
+    async def save_feed_selection_cache(
+        self, keyword: str, categories_hash: str, selected_feeds: dict[str, list[str]]
+    ) -> None:
+        """
+        Save feed selection cache for a keyword.
+        
+        Args:
+            keyword: The keyword associated with feed selection.
+            categories_hash: Hash of the category dictionary structure.
+            selected_feeds: Selected feeds mapping.
+        """
+        ...

@@ -13,3 +13,7 @@ class AIServiceProtocol(Protocol):
     async def synthesize_response(self, articles: list[NewsDTO], question: str, language: str = "vi") -> str:
         """Synthesize a factual response based on provided articles and a question in the target language."""
         ...
+
+    async def select_related_feeds(self, keyword: str, categories_dict: dict[str, list[str]], language: str = "vi") -> dict[str, list[str]]:
+        """Analyze a keyword and select which categories across publishers are highly related to it."""
+        ...

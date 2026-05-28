@@ -59,7 +59,7 @@ async def main() -> None:
     messenger = TelegramMessenger(bot=bot)
     
     llm_provider = get_provider()
-    ai_service = AIService(provider=llm_provider)
+    ai_service = AIService(provider=llm_provider, storage=storage)
     
     fetcher = AioHttpFetcher()
     news_repo = RSSCrawler(fetcher=fetcher)

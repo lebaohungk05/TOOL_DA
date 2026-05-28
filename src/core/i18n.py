@@ -32,8 +32,11 @@ I18N: dict[str, dict[str, str]] = {
         "cmd_block_removed": "✅ Đã xóa từ khóa chặn: {keyword}",
         "cmd_keyword_not_found": "Không tìm thấy từ khóa: {keyword}",
         "cmd_missing_keyword": "Vui lòng nhập từ khóa. Ví dụ: /follow AI",
-        "cmd_list_header": "⚙️ Cấu hình của bạn:\n\n📌 Theo dõi: {follow}\n🚫 Chặn: {block}\n⏰ Giờ nhận tin: {times}\n🌐 Ngôn ngữ: {language}",
+        "cmd_list_header": "⚙️ Cấu hình của bạn:\n\n📌 Theo dõi: {follow}\n🚫 Chặn: {block}\n⏰ Giờ nhận tin: {times}\n🌐 Ngôn ngữ: {language}\n📦 Nhận tin không liên quan: {unrelated}\n📡 Số nguồn tin tự chọn: {custom_feeds_count}",
         "cmd_user_not_found": "Bạn chưa đăng ký. Hãy gửi /start để bắt đầu.",
+        "cmd_unrelated_enabled": "📦 Nhận tin không liên quan: BẬT. Bản tin sẽ điền thêm tin tức tổng hợp nếu thiếu tin liên quan.",
+        "cmd_unrelated_disabled": "🚫 Nhận tin không liên quan: TẮT. Bản tin sẽ chỉ chứa đúng các chủ đề bạn theo dõi.",
+        "cmd_unrelated_invalid": "⚠️ Cú pháp không hợp lệ. Vui lòng sử dụng: /unrelated [yes/no]",
         
         # AI Prompts (Action-oriented)
         "prompt_summarizer": (
@@ -59,6 +62,19 @@ I18N: dict[str, dict[str, str]] = {
             "Ngôn ngữ: Trả lời bằng tiếng Việt.\n\n"
             "Các bài báo:\n{articles}\n\n"
             "Câu hỏi: {question}"
+        ),
+        "prompt_feed_selector": (
+            "Task: Select which news categories are highly related, matching, or contextually relevant to a user followed keyword.\n"
+            "Constraints:\n"
+            "- Analyze the keyword: '{keyword}'\n"
+            "- Below is the JSON mapping of publishers and their exact category keys:\n{categories_json}\n"
+            "- Return ONLY a valid JSON object mapping publisher names to lists of selected category keys.\n"
+            "- Do NOT include any markdown code blocks, explanation, or preamble. Return ONLY the raw JSON string.\n\n"
+            "Example output format:\n"
+            "{{\n"
+            "  \"VnExpress\": [\"so-hoa\"],\n"
+            "  \"Tuổi Trẻ\": [\"nhip-song-so\"]\n"
+            "}}\n"
         )
     },
     "en": {
@@ -91,8 +107,11 @@ I18N: dict[str, dict[str, str]] = {
         "cmd_block_removed": "✅ Block keyword removed: {keyword}",
         "cmd_keyword_not_found": "Keyword not found: {keyword}",
         "cmd_missing_keyword": "Please provide a keyword. Example: /follow AI",
-        "cmd_list_header": "⚙️ Your configuration:\n\n📌 Following: {follow}\n🚫 Blocking: {block}\n⏰ Briefing times: {times}\n🌐 Language: {language}",
+        "cmd_list_header": "⚙️ Your configuration:\n\n📌 Following: {follow}\n🚫 Blocking: {block}\n⏰ Briefing times: {times}\n🌐 Language: {language}\n📦 Receive unrelated news: {unrelated}\n📡 Customized feeds count: {custom_feeds_count}",
         "cmd_user_not_found": "You haven't registered yet. Send /start to begin.",
+        "cmd_unrelated_enabled": "📦 Receive unrelated news: ON. The briefing will append general fallback news if matched topics are low.",
+        "cmd_unrelated_disabled": "🚫 Receive unrelated news: OFF. The briefing will strictly contain your followed topics.",
+        "cmd_unrelated_invalid": "⚠️ Invalid syntax. Please use: /unrelated [yes/no]",
         
         # AI Prompts (Action-oriented)
         "prompt_summarizer": (
@@ -118,6 +137,19 @@ I18N: dict[str, dict[str, str]] = {
             "Language: Respond in English.\n\n"
             "Articles:\n{articles}\n\n"
             "Question: {question}"
+        ),
+        "prompt_feed_selector": (
+            "Task: Select which news categories are highly related, matching, or contextually relevant to a user followed keyword.\n"
+            "Constraints:\n"
+            "- Analyze the keyword: '{keyword}'\n"
+            "- Below is the JSON mapping of publishers and their exact category keys:\n{categories_json}\n"
+            "- Return ONLY a valid JSON object mapping publisher names to lists of selected category keys.\n"
+            "- Do NOT include any markdown code blocks, explanation, or preamble. Return ONLY the raw JSON string.\n\n"
+            "Example output format:\n"
+            "{{\n"
+            "  \"VnExpress\": [\"so-hoa\"],\n"
+            "  \"Tuổi Trẻ\": [\"nhip-song-so\"]\n"
+            "}}\n"
         )
     }
 }

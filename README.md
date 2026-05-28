@@ -135,7 +135,7 @@ news_agent/
 ### 1. Requirements & System Dependencies
 Make sure you have **uv** installed on your system. If not, install it via:
 ```bash
-curl -LsSf https://astral-sh/uv/install.sh | sh
+pip install uv
 ```
 
 ### 2. Environment Configurations

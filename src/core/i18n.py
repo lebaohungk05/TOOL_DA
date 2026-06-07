@@ -25,6 +25,10 @@ I18N: dict[str, dict[str, str]] = {
         "desc_unrelated": "Bật/tắt nhận tin không liên quan",
         "desc_list": "Xem cấu hình",
         "desc_brief": "Tạo bản tin ngay lập tức",
+        "desc_unfollow": "Xóa từ khóa theo dõi",
+        "desc_unblock": "Xóa từ khóa chặn",
+        "desc_lang": "Thay đổi ngôn ngữ hiển thị",
+        "lang_updated": "🌐 Ngôn ngữ đã được cập nhật thành Tiếng Việt.",
         
         # Onboarding
         "onboarding_choose_language": "🌐 Chọn ngôn ngữ / Choose your language:",
@@ -106,6 +110,10 @@ I18N: dict[str, dict[str, str]] = {
         "desc_unrelated": "Toggle unrelated news",
         "desc_list": "View configuration",
         "desc_brief": "Generate instant briefing",
+        "desc_unfollow": "Unfollow a keyword",
+        "desc_unblock": "Unblock a keyword",
+        "desc_lang": "Change display language",
+        "lang_updated": "🌐 Language has been updated to English.",
         
         # Onboarding
         "onboarding_choose_language": "🌐 Chọn ngôn ngữ / Choose your language:",

@@ -52,10 +52,11 @@ class TelegramFormatter:
             title = self._escape(item.title)
             summary = self._escape(item.summary)
             source = self._escape(item.source)
+            url = self._escape(item.url)
             
             body += f"{i}\\. *{title}*\n"
             body += f"   {summary}\n"
-            body += f"   _{source_label}: {source}_\n\n"
+            body += f"   _{source_label}: [{source}]({url})_\n\n"
             
         return header + body
 
@@ -205,3 +206,32 @@ class TelegramMessenger(MessengerProtocol):
             
         except Exception as e:
             logger.error(f"Failed to send notification to {recipient_id}: {str(e)}")
+
+    async def send_language_menu(self, recipient_id: str, is_update: bool = False, language: str = "vi") -> None:
+        """
+        Send language selection menu.
+        
+        Args:
+            recipient_id: The unique ID of the recipient.
+            is_update: Whether the language is being updated post-onboarding.
+            language: Current language of the user for instructions.
+        """
+        try:
+            chat_id = int(recipient_id)
+            prompt = get_text("onboarding_choose_language", language)
+            
+            builder = InlineKeyboardBuilder()
+            prefix = "update_lang:" if is_update else "lang:"
+            builder.button(text="🇻🇳 Tiếng Việt", callback_data=f"{prefix}vi")
+            builder.button(text="🇬🇧 English", callback_data=f"{prefix}en")
+            builder.adjust(2)
+            
+            await self.bot.send_message(
+                chat_id=chat_id,
+                text=prompt,
+                reply_markup=builder.as_markup()
+            )
+            logger.info(f"Language menu sent to chat {chat_id}")
+        except Exception as e:
+            logger.error(f"Failed to send language menu to {recipient_id}: {str(e)}")
+            raise

@@ -5,6 +5,10 @@ class NewsRepositoryProtocol(Protocol):
         """fetch new from feeds."""
         ...
 
+    async def fetch_full_contents(self, articles: list[NewsDTO]) -> list[NewsDTO]:
+        """Fetch full HTML text for the given list of articles."""
+        ...
+
     async def search_web(self, query: str, limit: int = 5) -> list[NewsDTO]:
         """search and crawl full content of each return page"""
         ...

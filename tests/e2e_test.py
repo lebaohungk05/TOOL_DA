@@ -133,9 +133,6 @@ async def run_e2e() -> None:
         # User triggers /start -> selected language
         await agent_controller.handle_interaction(recipient_id, "select_language", {"language": "vi"})
         
-        # User sets name
-        await agent_controller.handle_user_command(recipient_id, "Hoàng")
-        
         # User sets keyword inclusions (follow) and exclusions (block)
         await agent_controller.handle_user_command(recipient_id, "/follow Công nghệ")
         await agent_controller.handle_user_command(recipient_id, "/follow trí tuệ nhân tạo")
@@ -151,7 +148,7 @@ async def run_e2e() -> None:
         # Verify sqlite persistence
         config = await storage.get_user_config(recipient_id)
         assert config is not None, "User configuration failed to persist in SQLite!"
-        assert config.name == "Hoàng", "Persisted user name mismatch!"
+        assert config.name == "", "Persisted user name should be empty!"
         assert "Công nghệ" in config.follow_keywords, "Follow keywords did not persist!"
         assert "scandal" in config.block_keywords, "Block keywords did not persist!"
         assert config.allow_unrelated is False, "allow_unrelated failed to persist as False!"

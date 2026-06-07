@@ -47,10 +47,9 @@ class AgentController(AgentControllerProtocol):
 
         Priority order:
         1. /start command → trigger onboarding (handled by Telegram handler directly)
-        2. Onboarding state (awaiting_name) → complete registration
-        3. Commands: /follow, /block, /list
-        4. Focus Mode → deep-dive question
-        5. Fallback → ad-hoc stub
+        2. Commands: /follow, /block, /list
+        3. Focus Mode → deep-dive question
+        4. Fallback → ad-hoc stub
 
         Args:
             recipient_id: The unique recipient identifier.
@@ -61,9 +60,6 @@ class AgentController(AgentControllerProtocol):
 
         # 1. Check onboarding state
         session = await self.storage.get_session_context(recipient_id)
-        if session and session.get("onboarding_step") == "awaiting_name":
-            await self._complete_onboarding(recipient_id, stripped, session)
-            return
 
         # 2. Parse commands
         lower = stripped.lower()
@@ -78,6 +74,9 @@ class AgentController(AgentControllerProtocol):
             return
         if lower == "/list":
             await self._handle_list(recipient_id)
+            return
+        if lower == "/brief":
+            await self._handle_brief(recipient_id)
             return
 
         # 3. Check Focus Mode
@@ -112,13 +111,7 @@ class AgentController(AgentControllerProtocol):
 
         if action_id == "select_language":
             language: str = payload.get("language", "vi")
-            await self.storage.save_session_context(
-                recipient_id,
-                {"onboarding_step": "awaiting_name", "language": language},
-            )
-            await self.messenger.notify_event(
-                recipient_id, "onboarding_ask_name", language=language
-            )
+            await self._complete_onboarding(recipient_id, language)
 
         elif action_id == "deep_dive":
             article_id: str = payload.get("article_id", "")
@@ -158,18 +151,16 @@ class AgentController(AgentControllerProtocol):
         return config.language if config else "vi"
 
     async def _complete_onboarding(
-        self, recipient_id: str, name: str, session: dict[str, Any]
+        self, recipient_id: str, language: str
     ) -> None:
         """
         Finalize onboarding: save UserConfig with defaults, clear session,
-        send personalized welcome message.
+        send welcome message.
 
         Args:
             recipient_id: The unique recipient identifier.
-            name: The user's chosen display name.
-            session: The current session context containing language.
+            language: The user's selected language.
         """
-        language = session.get("language", "vi")
         times_str = ", ".join(DEFAULT_BRIEFING_TIMES)
 
         config = UserConfigDTO(
@@ -177,7 +168,7 @@ class AgentController(AgentControllerProtocol):
             recipient_id=recipient_id,
             follow_keywords=[],
             block_keywords=[],
-            name=name,
+            name="",
             briefing_times=list(DEFAULT_BRIEFING_TIMES),
             language=language,
         )
@@ -186,15 +177,14 @@ class AgentController(AgentControllerProtocol):
         # Clear onboarding session
         await self.storage.save_session_context(recipient_id, {})
 
-        # Send personalized welcome
+        # Send welcome
         await self.messenger.notify_event(
             recipient_id,
             "onboarding_welcome",
             language=language,
-            name=name,
             times=times_str,
         )
-        logger.info(f"Onboarding complete for {recipient_id} (name={name}, lang={language})")
+        logger.info(f"Onboarding complete for {recipient_id} (lang={language})")
 
     async def _handle_follow(self, recipient_id: str, text: str) -> None:
         """Parse /follow command, trigger LLM feed routing, and save customized URLs."""
@@ -312,6 +302,23 @@ class AgentController(AgentControllerProtocol):
             custom_feeds_count=custom_feeds_count,
             language_display=config.language.upper(),
         )
+
+    async def _handle_brief(self, recipient_id: str) -> None:
+        """
+        Immediately trigger a scheduled briefing for the user.
+
+        Args:
+            recipient_id: The unique recipient identifier.
+        """
+        config = await self.storage.get_user_config(user_id=recipient_id)
+        if not config:
+            await self.messenger.notify_event(recipient_id, "cmd_user_not_found")
+            return
+
+        await self.messenger.notify_event(
+            recipient_id, "cmd_brief_triggering", language=config.language
+        )
+        await self.briefing_service.run_scheduled_briefing(recipient_id)
 
     async def _handle_unrelated(self, recipient_id: str, text: str) -> None:
         """Parse /unrelated command and configure strict curation toggle."""

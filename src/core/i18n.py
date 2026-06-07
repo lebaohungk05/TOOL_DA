@@ -19,13 +19,19 @@ I18N: dict[str, dict[str, str]] = {
         "focus_mode_exited": "✅ Đã thoát chế độ tập trung.",
         "ad_hoc_searching": "🔍 Đang tìm kiếm thông tin cho yêu cầu của bạn...",
         "settings_not_implemented": "🚧 Tính năng cài đặt đang được phát triển.",
+        "desc_start": "Bắt đầu onboarding",
+        "desc_follow": "Theo dõi từ khóa",
+        "desc_block": "Chặn từ khóa",
+        "desc_unrelated": "Bật/tắt nhận tin không liên quan",
+        "desc_list": "Xem cấu hình",
+        "desc_brief": "Tạo bản tin ngay lập tức",
         
         # Onboarding
         "onboarding_choose_language": "🌐 Chọn ngôn ngữ / Choose your language:",
-        "onboarding_ask_name": "👋 Chào bạn! Hãy cho tôi biết tên của bạn:",
-        "onboarding_welcome": "✅ Xin chào {name}! Tôi là News Agent Bot.\n\n📰 Tôi sẽ tự động gửi bản tin tóm tắt cho bạn vào lúc {times}.\n🔍 Khi nhận bản tin, bạn có thể bấm nút để tìm hiểu sâu hơn.\n\nDùng /follow <từ khóa> để theo dõi chủ đề, /block <từ khóa> để chặn, /list để xem cấu hình.",
+        "onboarding_welcome": "✅ Xin chào! Tôi là News Agent Bot.\n\n📰 Tôi sẽ tự động gửi bản tin tóm tắt cho bạn vào lúc {times}.\n🔍 Khi nhận bản tin, bạn có thể bấm nút để tìm hiểu sâu hơn.\n\nDùng /follow <từ khóa> để theo dõi chủ đề, /block <từ khóa> để chặn, /list để xem cấu hình.",
         
         # Commands
+        "cmd_brief_triggering": "⏳ Đang tạo bản tin tức thời cho bạn...",
         "cmd_follow_added": "✅ Đã thêm từ khóa theo dõi: {keyword}",
         "cmd_block_added": "🚫 Đã thêm từ khóa chặn: {keyword}",
         "cmd_follow_removed": "✅ Đã xóa từ khóa theo dõi: {keyword}",
@@ -94,13 +100,19 @@ I18N: dict[str, dict[str, str]] = {
         "focus_mode_exited": "✅ Exited Focus Mode.",
         "ad_hoc_searching": "🔍 Searching the web for your request...",
         "settings_not_implemented": "🚧 Settings feature is under development.",
+        "desc_start": "Start onboarding",
+        "desc_follow": "Follow a keyword",
+        "desc_block": "Block a keyword",
+        "desc_unrelated": "Toggle unrelated news",
+        "desc_list": "View configuration",
+        "desc_brief": "Generate instant briefing",
         
         # Onboarding
         "onboarding_choose_language": "🌐 Chọn ngôn ngữ / Choose your language:",
-        "onboarding_ask_name": "👋 Hello! Please tell me your name:",
-        "onboarding_welcome": "✅ Hi {name}! I'm News Agent Bot.\n\n📰 I'll automatically send you news briefings at {times}.\n🔍 When you receive a briefing, tap any button to dive deeper.\n\nUse /follow <keyword> to track topics, /block <keyword> to block, /list to view config.",
+        "onboarding_welcome": "✅ Hello! I'm News Agent Bot.\n\n📰 I'll automatically send you news briefings at {times}.\n🔍 When you receive a briefing, tap any button to dive deeper.\n\nUse /follow <keyword> to track topics, /block <keyword> to block, /list to view config.",
         
         # Commands
+        "cmd_brief_triggering": "⏳ Generating an instant briefing for you...",
         "cmd_follow_added": "✅ Follow keyword added: {keyword}",
         "cmd_block_added": "🚫 Block keyword added: {keyword}",
         "cmd_follow_removed": "✅ Follow keyword removed: {keyword}",

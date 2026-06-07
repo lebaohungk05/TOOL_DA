@@ -17,6 +17,7 @@ import sys
 
 from dotenv import load_dotenv
 from aiogram import Bot, Dispatcher, Router
+from aiogram.types import BotCommand
 
 # Adapters
 from src.bot.telegram_messenger import TelegramMessenger
@@ -90,6 +91,16 @@ async def main() -> None:
 
     dp = Dispatcher()
     dp.include_router(router)
+
+    # --- Set Bot Commands ---
+    await bot.set_my_commands([
+        BotCommand(command="start", description="Start onboarding"),
+        BotCommand(command="follow", description="Follow a keyword"),
+        BotCommand(command="block", description="Block a keyword"),
+        BotCommand(command="unrelated", description="Toggle unrelated news"),
+        BotCommand(command="list", description="View configuration"),
+        BotCommand(command="brief", description="Generate instant briefing"),
+    ])
 
     # --- Start ---
     await scheduler.start()

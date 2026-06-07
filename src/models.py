@@ -20,4 +20,4 @@ class UserConfigDTO:
     briefing_times: list[str] = field(default_factory=list)
     language: str = "vi"
     allow_unrelated: bool = True
-    custom_feeds: list[str] = field(default_factory=list)
+    custom_feeds: dict[str, list[str]] = field(default_factory=dict)

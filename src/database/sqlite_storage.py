@@ -106,7 +106,7 @@ class SQLiteStorage(StorageProtocol):
             "name": config.name,
             "language": config.language,
             "allow_unrelated": getattr(config, "allow_unrelated", True),
-            "custom_feeds": list(getattr(config, "custom_feeds", [])),
+            "custom_feeds": getattr(config, "custom_feeds", {}),
         }
         config_json = json.dumps(config_dict)
 
@@ -145,7 +145,7 @@ class SQLiteStorage(StorageProtocol):
                 briefing_times=config_data.get("briefing_times", []),
                 language=config_data.get("language", "vi"),
                 allow_unrelated=config_data.get("allow_unrelated", True),
-                custom_feeds=config_data.get("custom_feeds", []),
+                custom_feeds=config_data.get("custom_feeds", {}),
             )
 
     async def save_session_context(self, recipient_id: str, context: dict) -> None:
@@ -201,7 +201,7 @@ class SQLiteStorage(StorageProtocol):
                     briefing_times=config_data.get("briefing_times", []),
                     language=config_data.get("language", "vi"),
                     allow_unrelated=config_data.get("allow_unrelated", True),
-                    custom_feeds=config_data.get("custom_feeds", []),
+                    custom_feeds=config_data.get("custom_feeds", {}),
                 ))
         return configs
 

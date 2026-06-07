@@ -15,3 +15,7 @@ class MessengerProtocol(Protocol):
     async def notify_event(self, recipient_id: str, message_key: str, **kwargs: Any) -> None:
         """Send system notifications (dùng i18n keys)."""
         ...
+
+    async def send_language_menu(self, recipient_id: str, is_update: bool = False, language: str = "vi") -> None:
+        """Send language selection menu."""
+        ...

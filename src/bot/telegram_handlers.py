@@ -49,10 +49,13 @@ def register_handlers(router: Router, controller: AgentControllerProtocol) -> No
                 [
                     BotCommand(command="start", description=get_text("desc_start", language)),
                     BotCommand(command="follow", description=get_text("desc_follow", language)),
+                    BotCommand(command="unfollow", description=get_text("desc_unfollow", language)),
                     BotCommand(command="block", description=get_text("desc_block", language)),
+                    BotCommand(command="unblock", description=get_text("desc_unblock", language)),
                     BotCommand(command="unrelated", description=get_text("desc_unrelated", language)),
                     BotCommand(command="list", description=get_text("desc_list", language)),
                     BotCommand(command="brief", description=get_text("desc_brief", language)),
+                    BotCommand(command="lang", description=get_text("desc_lang", language)),
                 ],
                 scope=BotCommandScopeChat(chat_id=callback.message.chat.id)
             )
@@ -72,9 +75,25 @@ def register_handlers(router: Router, controller: AgentControllerProtocol) -> No
         recipient_id = str(message.chat.id)
         await controller.handle_user_command(recipient_id, message.text)
 
+    @router.message(Command("unfollow"))
+    async def on_unfollow(message: Message) -> None:
+        """Handle /unfollow command — delegate to AgentController."""
+        if not message.text:
+            return
+        recipient_id = str(message.chat.id)
+        await controller.handle_user_command(recipient_id, message.text)
+
     @router.message(Command("block"))
     async def on_block(message: Message) -> None:
         """Handle /block command — delegate to AgentController."""
+        if not message.text:
+            return
+        recipient_id = str(message.chat.id)
+        await controller.handle_user_command(recipient_id, message.text)
+
+    @router.message(Command("unblock"))
+    async def on_unblock(message: Message) -> None:
+        """Handle /unblock command — delegate to AgentController."""
         if not message.text:
             return
         recipient_id = str(message.chat.id)
@@ -91,6 +110,12 @@ def register_handlers(router: Router, controller: AgentControllerProtocol) -> No
         """Handle /brief command — delegate to AgentController."""
         recipient_id = str(message.chat.id)
         await controller.handle_user_command(recipient_id, "/brief")
+
+    @router.message(Command("lang"))
+    async def on_lang(message: Message) -> None:
+        """Handle /lang command — delegate to AgentController."""
+        recipient_id = str(message.chat.id)
+        await controller.handle_user_command(recipient_id, "/lang")
 
     @router.message(F.text)
     async def on_text_message(message: Message) -> None:
@@ -129,3 +154,36 @@ def register_handlers(router: Router, controller: AgentControllerProtocol) -> No
             return
         recipient_id = str(callback.message.chat.id)
         await controller.handle_interaction(recipient_id, "settings", {})
+
+    @router.callback_query(F.data.startswith("update_lang:"))
+    async def on_update_language_selected(callback: CallbackQuery) -> None:
+        """Handle language selection callback during language update."""
+        await callback.answer()
+        if not callback.data or not callback.message:
+            return
+        language = callback.data.split(":", 1)[1]
+        recipient_id = str(callback.message.chat.id)
+        
+        # Update commands menu to use new language
+        if callback.bot:
+            try:
+                await callback.bot.set_my_commands(
+                    [
+                        BotCommand(command="start", description=get_text("desc_start", language)),
+                        BotCommand(command="follow", description=get_text("desc_follow", language)),
+                        BotCommand(command="unfollow", description=get_text("desc_unfollow", language)),
+                        BotCommand(command="block", description=get_text("desc_block", language)),
+                        BotCommand(command="unblock", description=get_text("desc_unblock", language)),
+                        BotCommand(command="unrelated", description=get_text("desc_unrelated", language)),
+                        BotCommand(command="list", description=get_text("desc_list", language)),
+                        BotCommand(command="brief", description=get_text("desc_brief", language)),
+                        BotCommand(command="lang", description=get_text("desc_lang", language)),
+                    ],
+                    scope=BotCommandScopeChat(chat_id=callback.message.chat.id)
+                )
+            except Exception as e:
+                logger.error(f"Failed to set bot commands during language update for chat {recipient_id}: {e}")
+
+        await controller.handle_interaction(
+            recipient_id, "update_language", {"language": language}
+        )

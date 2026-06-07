@@ -66,8 +66,14 @@ class AgentController(AgentControllerProtocol):
         if lower.startswith("/follow"):
             await self._handle_follow(recipient_id, stripped)
             return
+        if lower.startswith("/unfollow"):
+            await self._handle_unfollow(recipient_id, stripped)
+            return
         if lower.startswith("/block"):
             await self._handle_block(recipient_id, stripped)
+            return
+        if lower.startswith("/unblock"):
+            await self._handle_unblock(recipient_id, stripped)
             return
         if lower.startswith("/unrelated"):
             await self._handle_unrelated(recipient_id, stripped)
@@ -77,6 +83,9 @@ class AgentController(AgentControllerProtocol):
             return
         if lower == "/brief":
             await self._handle_brief(recipient_id)
+            return
+        if lower == "/lang":
+            await self._handle_lang(recipient_id)
             return
 
         # 3. Check Focus Mode
@@ -112,6 +121,10 @@ class AgentController(AgentControllerProtocol):
         if action_id == "select_language":
             language: str = payload.get("language", "vi")
             await self._complete_onboarding(recipient_id, language)
+
+        elif action_id == "update_language":
+            language: str = payload.get("language", "vi")
+            await self._update_language(recipient_id, language)
 
         elif action_id == "deep_dive":
             article_id: str = payload.get("article_id", "")
@@ -171,6 +184,7 @@ class AgentController(AgentControllerProtocol):
             name="",
             briefing_times=list(DEFAULT_BRIEFING_TIMES),
             language=language,
+            custom_feeds={}
         )
         await self.storage.upsert_user_config(user_id=recipient_id, config=config)
 
@@ -221,10 +235,11 @@ class AgentController(AgentControllerProtocol):
                 except Exception as e:
                     logger.warning(f"Failed to resolve matched feed {pub}/{cat}: {e}")
                     
-        # Merge and deduplicate custom feeds
-        existing_feeds = getattr(config, "custom_feeds", [])
-        updated_feeds = list(set(list(existing_feeds) + resolved_urls))
-        logger.info(f"Follow: Resolved {len(resolved_urls)} feed URLs. Total custom feeds: {len(updated_feeds)}")
+        # Update custom feeds map for this keyword
+        existing_feeds = getattr(config, "custom_feeds", {})
+        updated_feeds = dict(existing_feeds)
+        updated_feeds[keyword] = resolved_urls
+        logger.info(f"Follow: Resolved {len(resolved_urls)} feed URLs for '{keyword}'. Total tracked keywords: {len(updated_feeds)}")
 
         updated = UserConfigDTO(
             user_id=config.user_id,
@@ -269,7 +284,7 @@ class AgentController(AgentControllerProtocol):
             briefing_times=list(config.briefing_times),
             language=config.language,
             allow_unrelated=getattr(config, "allow_unrelated", True),
-            custom_feeds=list(getattr(config, "custom_feeds", []))
+            custom_feeds=dict(getattr(config, "custom_feeds", {}))
         )
         await self.storage.upsert_user_config(user_id=recipient_id, config=updated)
         await self.messenger.notify_event(
@@ -289,7 +304,12 @@ class AgentController(AgentControllerProtocol):
         
         allow_unrelated = getattr(config, "allow_unrelated", True)
         unrelated_str = "Có" if allow_unrelated else "Không"
-        custom_feeds_count = len(getattr(config, "custom_feeds", []))
+        
+        # Count unique custom feed URLs across all keywords
+        all_urls = set()
+        for urls in getattr(config, "custom_feeds", {}).values():
+            all_urls.update(urls)
+        custom_feeds_count = len(all_urls)
 
         await self.messenger.notify_event(
             recipient_id,
@@ -347,9 +367,114 @@ class AgentController(AgentControllerProtocol):
             briefing_times=list(config.briefing_times),
             language=config.language,
             allow_unrelated=val,
-            custom_feeds=list(getattr(config, "custom_feeds", []))
+            custom_feeds=dict(getattr(config, "custom_feeds", {}))
         )
         await self.storage.upsert_user_config(user_id=recipient_id, config=updated)
         
         event_key = "cmd_unrelated_enabled" if val else "cmd_unrelated_disabled"
         await self.messenger.notify_event(recipient_id, event_key, language=config.language)
+
+    async def _handle_unfollow(self, recipient_id: str, text: str) -> None:
+        """Parse /unfollow command and remove keyword from follow_keywords."""
+        config = await self.storage.get_user_config(user_id=recipient_id)
+        if not config:
+            await self.messenger.notify_event(recipient_id, "cmd_user_not_found")
+            return
+
+        keyword = text[len("/unfollow"):].strip()
+        if not keyword:
+            await self.messenger.notify_event(
+                recipient_id, "cmd_missing_keyword", language=config.language
+            )
+            return
+
+        updated_follow = list(config.follow_keywords)
+        if keyword in updated_follow:
+            updated_follow.remove(keyword)
+            existing_feeds = getattr(config, "custom_feeds", {})
+            updated_feeds = dict(existing_feeds)
+            updated_feeds.pop(keyword, None)
+            
+            updated = UserConfigDTO(
+                user_id=config.user_id,
+                recipient_id=config.recipient_id,
+                follow_keywords=updated_follow,
+                block_keywords=list(config.block_keywords),
+                name=config.name,
+                briefing_times=list(config.briefing_times),
+                language=config.language,
+                allow_unrelated=config.allow_unrelated,
+                custom_feeds=updated_feeds
+            )
+            await self.storage.upsert_user_config(user_id=recipient_id, config=updated)
+            await self.messenger.notify_event(
+                recipient_id, "cmd_follow_removed", language=config.language, keyword=keyword
+            )
+        else:
+            await self.messenger.notify_event(
+                recipient_id, "cmd_keyword_not_found", language=config.language, keyword=keyword
+            )
+
+    async def _handle_unblock(self, recipient_id: str, text: str) -> None:
+        """Parse /unblock command and remove keyword from block_keywords."""
+        config = await self.storage.get_user_config(user_id=recipient_id)
+        if not config:
+            await self.messenger.notify_event(recipient_id, "cmd_user_not_found")
+            return
+
+        keyword = text[len("/unblock"):].strip()
+        if not keyword:
+            await self.messenger.notify_event(
+                recipient_id, "cmd_missing_keyword", language=config.language
+            )
+            return
+
+        updated_block = list(config.block_keywords)
+        if keyword in updated_block:
+            updated_block.remove(keyword)
+            updated = UserConfigDTO(
+                user_id=config.user_id,
+                recipient_id=config.recipient_id,
+                follow_keywords=list(config.follow_keywords),
+                block_keywords=updated_block,
+                name=config.name,
+                briefing_times=list(config.briefing_times),
+                language=config.language,
+                allow_unrelated=config.allow_unrelated,
+                custom_feeds=dict(getattr(config, "custom_feeds", {}))
+            )
+            await self.storage.upsert_user_config(user_id=recipient_id, config=updated)
+            await self.messenger.notify_event(
+                recipient_id, "cmd_block_removed", language=config.language, keyword=keyword
+            )
+        else:
+            await self.messenger.notify_event(
+                recipient_id, "cmd_keyword_not_found", language=config.language, keyword=keyword
+            )
+
+    async def _handle_lang(self, recipient_id: str) -> None:
+        """Parse /lang command and send language selection menu."""
+        config = await self.storage.get_user_config(user_id=recipient_id)
+        if not config:
+            await self.messenger.notify_event(recipient_id, "cmd_user_not_found")
+            return
+        await self.messenger.send_language_menu(recipient_id, is_update=True, language=config.language)
+
+    async def _update_language(self, recipient_id: str, language: str) -> None:
+        """Update the user's language without resetting other configuration."""
+        config = await self.storage.get_user_config(user_id=recipient_id)
+        if not config:
+            return
+        updated = UserConfigDTO(
+            user_id=config.user_id,
+            recipient_id=config.recipient_id,
+            follow_keywords=list(config.follow_keywords),
+            block_keywords=list(config.block_keywords),
+            name=config.name,
+            briefing_times=list(config.briefing_times),
+            language=language,
+            allow_unrelated=config.allow_unrelated,
+            custom_feeds=dict(getattr(config, "custom_feeds", {}))
+        )
+        await self.storage.upsert_user_config(user_id=recipient_id, config=updated)
+        await self.messenger.notify_event(recipient_id, "lang_updated", language=language)

@@ -4,6 +4,8 @@ import asyncio
 import urllib.parse
 from dataclasses import replace
 
+from datetime import datetime, timezone, timedelta
+
 import aiohttp
 import feedparser
 from bs4 import BeautifulSoup
@@ -47,21 +49,57 @@ class RSSCrawler(NewsRepositoryProtocol):
             source_title = feed.feed.get('title', 'UNKNOWN_SOURCE')
             entries = feed.entries
 
-            # Collect all URLs and fetch in batch
-            urls = [e.get('link', '') for e in entries if e.get('link')]
-            full_contents = await self.fetcher.fetch_contents(urls)
-            
-            # Map contents back to entries
-            content_map = dict(zip(urls, full_contents))
-            
+            # Filter entries based on feed validity and date
+            is_thanh_nien: bool = "thanhnien.vn" in url
+            if is_thanh_nien:
+                entries = entries[:50]
+            else:
+                is_broken: bool = False
+                if entries:
+                    first_entry = entries[0]
+                    pub_parsed = first_entry.get('published_parsed')
+                    if pub_parsed and pub_parsed.tm_year < 2026:
+                        is_broken = True
+                
+                if is_broken:
+                    entries = entries[:50]
+                else:
+                    # Filter for yesterday and today (Vietnam time: UTC+7)
+                    vn_tz = timezone(timedelta(hours=7))
+                    now_vn = datetime.now(vn_tz)
+                    yesterday_vn = now_vn - timedelta(days=1)
+                    start_of_yesterday = datetime(
+                        year=yesterday_vn.year,
+                        month=yesterday_vn.month,
+                        day=yesterday_vn.day,
+                        hour=0,
+                        minute=0,
+                        second=0,
+                        microsecond=0,
+                        tzinfo=vn_tz
+                    )
+                    
+                    filtered_entries = []
+                    for entry in entries:
+                        pub_parsed = entry.get('published_parsed')
+                        if pub_parsed:
+                            entry_dt_utc = datetime(*pub_parsed[:6], tzinfo=timezone.utc)
+                            if entry_dt_utc >= start_of_yesterday:
+                                filtered_entries.append(entry)
+                        else:
+                            filtered_entries.append(entry)
+                    entries = filtered_entries
+
             articles = []
             for entry in entries:
                 url = entry.get('link', '')
                 if not url:
                     continue
                 
-                raw_content = content_map.get(url, "")
-                summary = entry.get('summary', 'NO_SUMMARY')
+                raw_summary = entry.get('summary', 'NO_SUMMARY')
+                # Strip HTML tags and clean whitespace
+                summary = BeautifulSoup(raw_summary, "html.parser").get_text(separator=" ").strip()
+                summary = " ".join(summary.split())
                 
                 articles.append(NewsDTO(
                     article_id=self._generate_article_id(url),
@@ -70,7 +108,7 @@ class RSSCrawler(NewsRepositoryProtocol):
                     source=source_title,
                     summary=summary,
                     published_at=entry.get('published', 'NO_DATE'),
-                    raw_content=raw_content if raw_content else summary
+                    raw_content=summary
                 ))
             return articles
 
@@ -100,6 +138,31 @@ class RSSCrawler(NewsRepositoryProtocol):
         
         logger.info(f"Crawl completed. Found {len(all_articles)} total items.")
         return all_articles
+
+    async def fetch_full_contents(self, articles: list[NewsDTO]) -> list[NewsDTO]:
+        """
+        Fetch full HTML body text for the provided list of articles.
+        
+        Args:
+            articles: The list of articles to update with full content.
+            
+        Returns:
+            The list of updated articles with populated raw_content.
+        """
+        if not articles:
+            return []
+            
+        urls = [a.url for a in articles if a.url]
+        full_contents = await self.fetcher.fetch_contents(urls)
+        
+        content_map = dict(zip(urls, full_contents))
+        
+        updated_articles = []
+        for a in articles:
+            raw_c = content_map.get(a.url, "")
+            updated_articles.append(replace(a, raw_content=raw_c if raw_c else a.summary))
+            
+        return updated_articles
 
     def _parse_vietnamnet_search(self, html: str) -> list[NewsDTO]:
         """Parse search results from VietnamNet."""

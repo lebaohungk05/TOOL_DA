@@ -135,10 +135,13 @@ class BriefingService(BriefingServiceProtocol):
                 follow_keywords = user_config.follow_keywords
                 block_keywords = user_config.block_keywords
                 allow_unrelated = getattr(user_config, "allow_unrelated", True)
-                custom_feeds = getattr(user_config, "custom_feeds", [])
+                custom_feeds = getattr(user_config, "custom_feeds", {})
                 
             # Use dynamically routed custom feeds if available, otherwise crawl all
-            feeds = custom_feeds if custom_feeds else ["default_rss"]
+            if custom_feeds:
+                feeds = list({url for urls in custom_feeds.values() for url in urls})
+            else:
+                feeds = ["default_rss"]
             
             # 2. Fetch fresh news
             raw_news = await self.news_repo.fetch_from_feeds(feeds)
@@ -149,8 +152,8 @@ class BriefingService(BriefingServiceProtocol):
             # Apply filtering and prioritization based on user config
             filtered_news = self._filter_and_prioritize(raw_news, follow_keywords, block_keywords, allow_unrelated)
 
-            # Keep top 5
-            top_news = filtered_news[:5]
+            # Keep top 5 and fetch full content for them
+            top_news = await self.news_repo.fetch_full_contents(filtered_news[:5])
 
             # 3. Parallelize AI Summarization
             async def summarize_task(item: NewsDTO) -> NewsDTO:

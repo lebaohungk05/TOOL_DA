@@ -11,7 +11,7 @@ class AioHttpFetcher(ContentFetcherProtocol):
     Standard fetcher using aiohttp and BeautifulSoup for static HTML extraction.
     """
 
-    def __init__(self, concurrent_limit: int = 10):
+    def __init__(self, concurrent_limit: int = 20):
         self._semaphore = asyncio.Semaphore(concurrent_limit)
         self._headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
@@ -25,9 +25,25 @@ class AioHttpFetcher(ContentFetcherProtocol):
         """
         Fetch HTML from multiple URLs concurrently.
         """
+        if not urls:
+            logger.debug("No URLs to fetch. Success rate: 0%")
+            return []
+        results = []
+        batch_size = 20
         async with aiohttp.ClientSession(timeout=self._timeout) as session:
-            tasks = [self._fetch_single(session, url) for url in urls]
-            return list(await asyncio.gather(*tasks))
+            for i in range(0, len(urls), batch_size):
+                if i > 0:
+                    logger.debug("Waiting 5 seconds before fetching next batch for same source...")
+                    await asyncio.sleep(5)
+                batch = urls[i:i + batch_size]
+                tasks = [self._fetch_single(session, url) for url in batch]
+                batch_results = await asyncio.gather(*tasks)
+                results.extend(batch_results)
+            
+            success_count = sum(1 for res in results if res)
+            success_rate = (success_count / len(urls)) * 100
+            logger.debug(f"Fetched {success_count}/{len(urls)} articles successfully ({success_rate:.2f}%)")
+            return results
 
     async def _fetch_single(self, session: aiohttp.ClientSession, url: str) -> str:
         """Helper to fetch a single URL with semantic extraction."""

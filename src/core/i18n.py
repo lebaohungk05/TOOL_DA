@@ -56,13 +56,14 @@ I18N: dict[str, dict[str, str]] = {
             "Nội dung: {content}"
         ),
         "prompt_query_designer": (
-            "Nhiệm vụ: Trích xuất từ khóa tìm kiếm cốt lõi từ yêu cầu của người dùng.\n"
+            "Nhiệm vụ: Trích xuất 1 từ khóa hoặc 1 cụm từ khóa quan trọng nhất từ yêu cầu của người dùng để phục vụ tìm kiếm.\n"
             "Ràng buộc:\n"
-            "- Trả về TỐI ĐA 5 từ khóa, cách nhau bởi dấu cách.\n"
-            "- CHỈ trả về các từ khóa, không thêm bất kỳ văn bản nào khác.\n"
-            "- KHÔNG thêm thông tin thời gian (năm, tháng) trừ khi người dùng yêu cầu cụ thể.\n"
-            "- KHÔNG sử dụng toán tử tìm kiếm (site:, OR, dấu ngoặc kép).\n"
-            "- Ưu tiên danh từ riêng và thuật ngữ chuyên ngành.\n\n"
+            "- không thêm bất kỳ văn bản, nhãn hoặc giải thích nào khác.\n"
+            "- Giữ nguyên tên riêng, tên sản phẩm, tên công ty, địa danh và thuật ngữ chuyên ngành.\n"
+            "- Loại bỏ các từ không mang giá trị tìm kiếm như đại từ, trợ từ, từ nối và động từ chung chung.\n"
+            "- Ưu tiên các thực thể (entity) và khái niệm thể hiện rõ ý định tìm kiếm.\n"
+            "- CHỈ giữ thông tin thời gian (năm, tháng, quý...) khi nó là một phần quan trọng của yêu cầu.\n"
+            "- KHÔNG sử dụng toán tử tìm kiếm (site:, OR, dấu ngoặc kép, dấu +, dấu -).\n"
             "Yêu cầu: {user_prompt}"
         ),
         "prompt_synthesizer": (
@@ -141,13 +142,14 @@ I18N: dict[str, dict[str, str]] = {
             "Content: {content}"
         ),
         "prompt_query_designer": (
-            "Task: Extract core search keywords from the user's request.\n"
+            "Task: Extract the single most important keyword or keyphrase from the user's request for search purposes.\n"
             "Constraints:\n"
-            "- Return a MAXIMUM of 5 keywords, separated by spaces.\n"
-            "- Return ONLY the keywords, with no other text.\n"
-            "- Do NOT add time information (year, month) unless specifically requested by the user.\n"
-            "- Do NOT use search operators (site:, OR, quotes).\n"
-            "- Prioritize proper nouns and specialized terminology.\n\n"
+            "- Do not add any other text, labels, or explanations.\n"
+            "- Preserve proper nouns, product names, company names, locations, and technical terms.\n"
+            "- Remove non-search-value words such as pronouns, particles, conjunctions, and generic verbs.\n"
+            "- Prioritize entities and concepts that clearly reflect the search intent.\n"
+            "- ONLY keep time information (year, month, quarter...) if it is a crucial part of the request.\n"
+            "- DO NOT use search operators (site:, OR, quotation marks, +, -).\n"
             "Request: {user_prompt}"
         ),
         "prompt_synthesizer": (

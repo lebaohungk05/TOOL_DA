@@ -233,7 +233,7 @@ class BriefingService(BriefingServiceProtocol):
             # 3. Extract Search Queries
             try:
                 # Wrap full article context into the user prompt for high-quality extraction
-                context = f"Title: {original_article.title}\nSummary: {original_article.summary}"
+                context = f"Title: {original_article.title}\nContent: {original_article.raw_content}"
                 enriched_prompt = f"### CONTEXT ###\n{context}\n\n### USER QUESTION ###\n{question}"
                 
                 search_term = await self.ai_service.extract_search_queries(enriched_prompt, lang)

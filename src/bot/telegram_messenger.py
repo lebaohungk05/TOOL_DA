@@ -1,3 +1,4 @@
+import html
 import logging
 from typing import Any
 from aiogram import Bot
@@ -27,6 +28,18 @@ class TelegramFormatter:
         Returns:
             The escaped string safe for MarkdownV2.
         """
+        if not text:
+            return ""
+            
+        # Recursively unescape HTML/XML entities up to 3 times to handle double-escaping
+        current = text
+        for _ in range(3):
+            next_text = html.unescape(current)
+            if next_text == current:
+                break
+            current = next_text
+        text = current
+        
         escape_chars = r'_*[]()~`>#+-=|{}.!'
         return "".join(f"\\{c}" if c in escape_chars else c for c in text)
 

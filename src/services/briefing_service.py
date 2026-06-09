@@ -149,8 +149,17 @@ class BriefingService(BriefingServiceProtocol):
                 await self.messenger.notify_event(recipient_id, "no_news_found", language=lang)
                 return
 
+            # Fetch previously delivered URLs
+            delivered_urls = set(await self.storage.get_delivered_urls(user_id=recipient_id, within_days=2))
+
+            # Exclude already delivered news items
+            fresh_news = [item for item in raw_news if item.url not in delivered_urls]
+            if not fresh_news:
+                await self.messenger.notify_event(recipient_id, "no_news_found", language=lang)
+                return
+
             # Apply filtering and prioritization based on user config
-            filtered_news = self._filter_and_prioritize(raw_news, follow_keywords, block_keywords, allow_unrelated)
+            filtered_news = self._filter_and_prioritize(fresh_news, follow_keywords, block_keywords, allow_unrelated)
 
             # Keep top 5 and fetch full content for them
             top_news = await self.news_repo.fetch_full_contents(filtered_news[:5])
@@ -194,6 +203,12 @@ class BriefingService(BriefingServiceProtocol):
 
             # 5. Push via Telegram
             await self.messenger.send_briefing(recipient_id, final_news, lang)
+
+            # Mark newly delivered articles
+            delivered_urls_sent = [item.url for item in final_news]
+            if delivered_urls_sent:
+                await self.storage.mark_articles_delivered(recipient_id, delivered_urls_sent)
+
             logger.info(f"Successfully completed briefing for recipient {recipient_id} in {lang}")
 
         except Exception as e:

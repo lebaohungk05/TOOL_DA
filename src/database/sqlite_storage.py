@@ -92,6 +92,15 @@ class SQLiteStorage(StorageProtocol):
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
+
+        await self._connection.execute("""
+            CREATE TABLE IF NOT EXISTS user_delivered_articles (
+                user_id TEXT,
+                url TEXT,
+                delivered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (user_id, url)
+            )
+        """)
         await self._connection.commit()
 
     async def upsert_user_config(self, user_id: str, config: UserConfigDTO) -> None:
@@ -299,5 +308,60 @@ class SQLiteStorage(StorageProtocol):
                 updated_at = CURRENT_TIMESTAMP
             """,
             (keyword, categories_hash, selected_feeds_json)
+        )
+        await self._connection.commit()
+
+    async def get_delivered_urls(self, user_id: str, within_days: int = 2) -> list[str]:
+        """
+        Retrieve URLs of articles delivered to the user within specified days.
+
+        Args:
+            user_id: The unique user ID.
+            within_days: Time window in days.
+
+        Returns:
+            A list of delivered article URLs.
+        """
+        if not self._connection:
+            await self.connect()
+
+        urls: list[str] = []
+        async with self._connection.execute(
+            """
+            SELECT url FROM user_delivered_articles 
+            WHERE user_id = ? AND delivered_at >= datetime('now', ?)
+            """,
+            (user_id, f"-{within_days} days")
+        ) as cursor:
+            async for row in cursor:
+                urls.append(row["url"])
+        return urls
+
+    async def mark_articles_delivered(self, user_id: str, urls: list[str]) -> None:
+        """
+        Mark a list of article URLs as delivered to the user.
+        Also prunes records older than 2 days.
+
+        Args:
+            user_id: The unique user ID.
+            urls: List of delivered article URLs.
+        """
+        if not self._connection:
+            await self.connect()
+
+        for url in urls:
+            await self._connection.execute(
+                """
+                INSERT OR IGNORE INTO user_delivered_articles (user_id, url)
+                VALUES (?, ?)
+                """,
+                (user_id, url)
+            )
+
+        await self._connection.execute(
+            """
+            DELETE FROM user_delivered_articles
+            WHERE delivered_at < datetime('now', '-2 days')
+            """
         )
         await self._connection.commit()

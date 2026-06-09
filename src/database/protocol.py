@@ -114,3 +114,27 @@ class StorageProtocol(Protocol):
             selected_feeds: Selected feeds mapping.
         """
         ...
+
+    async def get_delivered_urls(self, user_id: str, within_days: int = 2) -> list[str]:
+        """
+        Retrieve URLs of articles delivered to the user within specified days.
+
+        Args:
+            user_id: The unique user ID.
+            within_days: Time window in days.
+
+        Returns:
+            A list of delivered article URLs.
+        """
+        ...
+
+    async def mark_articles_delivered(self, user_id: str, urls: list[str]) -> None:
+        """
+        Mark a list of article URLs as delivered to the user.
+
+        Args:
+            user_id: The unique user ID.
+            urls: List of delivered article URLs.
+        """
+        ...
+
